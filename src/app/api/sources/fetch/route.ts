@@ -7,7 +7,7 @@ import { batchCategorize } from '@/lib/grok';
 import { NewsItem } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 25;
+export const maxDuration = 60; // Vercel Pro plan
 
 // Dedup by URL
 function deduplicateItems(items: NewsItem[]): NewsItem[] {

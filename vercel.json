@@ -7,20 +7,20 @@
       "maxDuration": 30
     },
     "src/app/api/sources/fetch/route.ts": {
-      "maxDuration": 25
+      "maxDuration": 60
     },
     "src/app/api/articles/generate/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 300
     }
   },
   "crons": [
     {
       "path": "/api/sources/fetch",
-      "schedule": "0 6 * * *"
+      "schedule": "*/30 * * * *"
     },
     {
       "path": "/api/articles/generate",
-      "schedule": "0 7 * * *"
+      "schedule": "*/15 * * * *"
     }
   ]
 }

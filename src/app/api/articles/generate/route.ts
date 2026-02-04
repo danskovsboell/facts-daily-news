@@ -3,13 +3,80 @@ import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { RawSource } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300; // Vercel Pro plan
 
 const GROK_API_KEY = process.env.GROK_API_KEY;
 const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
 const ARTICLE_MODEL = 'grok-3-mini';
 
-// Group related sources by similarity in title
+// Batch config: process small batches per cron invocation
+const MAX_SOURCES_PER_RUN = 25;
+const MAX_ARTICLES_PER_RUN = 5;
+
+// ─── Dedup helpers ───────────────────────────────────────────
+
+/** Normalize a title for fuzzy comparison */
+function normalizeTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-zæøåäöü0-9\s]/g, '') // keep letters/digits
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Extract significant words (>3 chars) from a title */
+function significantWords(title: string): Set<string> {
+  // Common Danish/English stop words to ignore
+  const stopWords = new Set([
+    'efter', 'over', 'under', 'med', 'uden', 'ikke', 'denne', 'dette',
+    'disse', 'mere', 'mest', 'andre', 'andet', 'mange', 'nogle',
+    'skal', 'ville', 'have', 'være', 'blev', 'bliver', 'også',
+    'eller', 'when', 'what', 'that', 'this', 'with', 'from',
+    'they', 'their', 'about', 'than', 'will', 'been', 'have',
+    'just', 'more', 'some', 'other', 'into', 'could',
+  ]);
+  return new Set(
+    normalizeTitle(title)
+      .split(' ')
+      .filter(w => w.length > 3 && !stopWords.has(w))
+  );
+}
+
+/** Jaccard similarity between two sets of words (0-1) */
+function titleSimilarity(a: string, b: string): number {
+  const setA = significantWords(a);
+  const setB = significantWords(b);
+  if (setA.size === 0 || setB.size === 0) return 0;
+  let intersection = 0;
+  for (const w of setA) {
+    if (setB.has(w)) intersection++;
+  }
+  const union = new Set([...setA, ...setB]).size;
+  return union === 0 ? 0 : intersection / union;
+}
+
+/** Check if a title is too similar to any existing article title */
+function isDuplicate(newTitle: string, existingTitles: string[]): { isDup: boolean; matchedTitle?: string; similarity?: number } {
+  const normNew = normalizeTitle(newTitle);
+  for (const existing of existingTitles) {
+    const normExisting = normalizeTitle(existing);
+
+    // Exact match after normalization
+    if (normNew === normExisting) {
+      return { isDup: true, matchedTitle: existing, similarity: 1.0 };
+    }
+
+    // Fuzzy match: Jaccard similarity > 0.6
+    const sim = titleSimilarity(newTitle, existing);
+    if (sim > 0.6) {
+      return { isDup: true, matchedTitle: existing, similarity: sim };
+    }
+  }
+  return { isDup: false };
+}
+
+// ─── Source grouping ─────────────────────────────────────────
+
 function groupSources(sources: RawSource[]): RawSource[][] {
   const groups: RawSource[][] = [];
   const used = new Set<string>();
@@ -20,17 +87,17 @@ function groupSources(sources: RawSource[]): RawSource[][] {
     const group = [source];
     used.add(source.id);
 
-    // Find related sources (similar titles)
-    const titleWords = new Set(
-      source.title.toLowerCase().split(/\s+/).filter(w => w.length > 3)
-    );
+    const titleWords = significantWords(source.title);
 
     for (const other of sources) {
       if (used.has(other.id)) continue;
       if (other.category !== source.category) continue;
 
-      const otherWords = other.title.toLowerCase().split(/\s+/).filter(w => w.length > 3);
-      const overlap = otherWords.filter(w => titleWords.has(w)).length;
+      const otherWords = significantWords(other.title);
+      let overlap = 0;
+      for (const w of otherWords) {
+        if (titleWords.has(w)) overlap++;
+      }
 
       // At least 2 significant words in common
       if (overlap >= 2) {
@@ -44,6 +111,8 @@ function groupSources(sources: RawSource[]): RawSource[][] {
 
   return groups;
 }
+
+// ─── Article generation ──────────────────────────────────────
 
 async function generateArticle(sources: RawSource[]): Promise<{
   title: string;
@@ -88,7 +157,7 @@ SVAR I JSON FORMAT:
 }`;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 50000);
+  const timeout = setTimeout(() => controller.abort(), 90000); // 90s per article (Pro plan gives us room)
 
   try {
     const response = await fetch(GROK_API_URL, {
@@ -145,6 +214,8 @@ SVAR I JSON FORMAT:
   }
 }
 
+// ─── Main handler ────────────────────────────────────────────
+
 export async function GET() {
   try {
     if (!isSupabaseConfigured()) {
@@ -163,7 +234,7 @@ export async function GET() {
       return NextResponse.json({ error: 'GROK_API_KEY not configured' }, { status: 503 });
     }
 
-    // Get unprocessed sources (last 24h, max 50)
+    // ── Step 1: Fetch unprocessed sources (small batch) ──────
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: rawSources, error: fetchError } = await supabase
       .from('raw_sources')
@@ -171,7 +242,7 @@ export async function GET() {
       .eq('processed', false)
       .gte('fetched_at', oneDayAgo)
       .order('fetched_at', { ascending: false })
-      .limit(50);
+      .limit(MAX_SOURCES_PER_RUN);
 
     if (fetchError) {
       console.error('Fetch raw_sources error:', fetchError);
@@ -185,21 +256,98 @@ export async function GET() {
       return NextResponse.json({ generated: 0, message: 'No unprocessed sources' });
     }
 
-    // Group related sources
-    const groups = groupSources(rawSources as RawSource[]);
+    // ── Step 2: Load existing article titles for dedup ───────
+    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const { data: existingArticles } = await supabase
+      .from('articles')
+      .select('title')
+      .gte('created_at', twoDaysAgo);
+
+    const existingTitles: string[] = (existingArticles || []).map((a: { title: string }) => a.title);
+
+    // Also check existing source URLs to avoid regenerating from same source
+    const { data: existingSourceUrls } = await supabase
+      .from('articles')
+      .select('sources')
+      .gte('created_at', twoDaysAgo);
+
+    const usedSourceUrls = new Set<string>();
+    for (const article of existingSourceUrls || []) {
+      if (Array.isArray(article.sources)) {
+        for (const src of article.sources) {
+          if (src.url) usedSourceUrls.add(src.url.toLowerCase());
+        }
+      }
+    }
+
+    // ── Step 3: Filter out sources whose URLs are already used ─
+    const freshSources = (rawSources as RawSource[]).filter(s => {
+      const urlUsed = usedSourceUrls.has(s.url.toLowerCase());
+      if (urlUsed) {
+        // Mark as processed silently since we already have an article from this source
+        supabase
+          .from('raw_sources')
+          .update({ processed: true })
+          .eq('id', s.id)
+          .then(() => {});
+      }
+      return !urlUsed;
+    });
+
+    if (freshSources.length === 0) {
+      // Mark remaining as processed anyway
+      const ids = (rawSources as RawSource[]).map(s => s.id);
+      await supabase.from('raw_sources').update({ processed: true }).in('id', ids);
+      return NextResponse.json({
+        generated: 0,
+        message: 'All sources already covered by existing articles',
+        skipped_duplicate_sources: rawSources.length,
+      });
+    }
+
+    // ── Step 4: Group related sources ────────────────────────
+    const groups = groupSources(freshSources);
     const articlesGenerated: string[] = [];
+    const skippedDuplicates: string[] = [];
     const errors: string[] = [];
 
-    // Generate articles (max 10 per run to stay within time limits)
-    const maxArticles = Math.min(groups.length, 10);
+    // ── Step 5: Generate articles (max per run) ──────────────
+    let articlesCreated = 0;
 
-    for (let i = 0; i < maxArticles; i++) {
+    for (let i = 0; i < groups.length && articlesCreated < MAX_ARTICLES_PER_RUN; i++) {
       const group = groups[i];
 
       try {
+        // Pre-check: would the primary source title be a duplicate?
+        const primaryTitle = group[0].title;
+        const dupCheck = isDuplicate(primaryTitle, existingTitles);
+        if (dupCheck.isDup) {
+          skippedDuplicates.push(
+            `"${primaryTitle}" ≈ "${dupCheck.matchedTitle}" (${Math.round((dupCheck.similarity || 0) * 100)}%)`
+          );
+          // Mark sources as processed so we don't retry
+          const sourceIds = group.map(s => s.id);
+          await supabase.from('raw_sources').update({ processed: true }).in('id', sourceIds);
+          continue;
+        }
+
         const article = await generateArticle(group);
         if (!article || !article.body || article.body.length < 50) {
           errors.push(`Group ${i}: generation returned empty/short article`);
+          // Still mark as processed to avoid retrying bad sources
+          const sourceIds = group.map(s => s.id);
+          await supabase.from('raw_sources').update({ processed: true }).in('id', sourceIds);
+          continue;
+        }
+
+        // Post-check: is the generated title a duplicate?
+        const genDupCheck = isDuplicate(article.title, existingTitles);
+        if (genDupCheck.isDup) {
+          skippedDuplicates.push(
+            `Generated "${article.title}" ≈ "${genDupCheck.matchedTitle}" (${Math.round((genDupCheck.similarity || 0) * 100)}%)`
+          );
+          const sourceIds = group.map(s => s.id);
+          await supabase.from('raw_sources').update({ processed: true }).in('id', sourceIds);
           continue;
         }
 
@@ -230,6 +378,8 @@ export async function GET() {
         }
 
         articlesGenerated.push(article.title);
+        existingTitles.push(article.title); // Add to dedup list for this run
+        articlesCreated++;
 
         // Mark sources as processed
         const sourceIds = group.map(s => s.id);
@@ -239,16 +389,21 @@ export async function GET() {
           .in('id', sourceIds);
       } catch (err) {
         errors.push(`Group ${i}: ${err instanceof Error ? err.message : 'unknown error'}`);
+        // Mark as processed to prevent infinite retry loops
+        const sourceIds = group.map(s => s.id);
+        await supabase.from('raw_sources').update({ processed: true }).in('id', sourceIds);
       }
     }
 
     return NextResponse.json({
       generated: articlesGenerated.length,
       total_groups: groups.length,
-      processed_groups: maxArticles,
+      processed_groups: Math.min(groups.length, MAX_ARTICLES_PER_RUN + skippedDuplicates.length),
       articles: articlesGenerated,
+      skipped_duplicates: skippedDuplicates.length > 0 ? skippedDuplicates : undefined,
       errors: errors.length > 0 ? errors : undefined,
       raw_sources_count: rawSources.length,
+      fresh_sources_count: freshSources.length,
     });
   } catch (error) {
     console.error('Article generation error:', error);
