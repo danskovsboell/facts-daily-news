@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchAllFeeds } from '@/lib/rss';
-import { fetchTopHeadlines } from '@/lib/newsapi';
+import { fetchAllNewsAPI } from '@/lib/newsapi';
 import { batchCategorize } from '@/lib/grok';
 import { Category, SubCategory, NewsItem } from '@/lib/types';
 
@@ -16,19 +16,30 @@ interface NewsCache {
 const newsCache = new Map<string, NewsCache>();
 const NEWS_CACHE_TTL = 5 * 60 * 1000; // 5 min
 
-function getNewsCacheKey(category?: string, subCategory?: string): string {
-  return `${category || 'all'}::${subCategory || 'all'}`;
+function getNewsCacheKey(category?: string, subCategory?: string, skipGrok?: boolean): string {
+  return `${category || 'all'}::${subCategory || 'all'}${skipGrok ? '::skip' : ''}`;
 }
 
-// Dedup by title similarity
+// Dedup by URL + title fallback
 function deduplicateItems(items: NewsItem[]): NewsItem[] {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    const key = item.title.toLowerCase().replace(/[^a-zæøå0-9]/g, '').slice(0, 60);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const seenUrls = new Set<string>();
+  const seenTitles = new Set<string>();
+  const result: NewsItem[] = [];
+
+  for (const item of items) {
+    // Primær: URL-baseret dedup
+    const urlKey = item.link?.toLowerCase().replace(/\/$/, '');
+    if (urlKey && seenUrls.has(urlKey)) continue;
+    if (urlKey) seenUrls.add(urlKey);
+
+    // Sekundær: titel-dedup (fanger samme historie fra forskellige kilder)
+    const titleKey = item.title.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (seenTitles.has(titleKey)) continue;
+    seenTitles.add(titleKey);
+
+    result.push(item);
+  }
+  return result;
 }
 
 // Race a promise against a timeout
@@ -47,7 +58,7 @@ export async function GET(request: NextRequest) {
     const skipGrok = searchParams.get('skipGrok') === 'true';
 
     // Check cache first
-    const cacheKey = getNewsCacheKey(category || undefined, subCategory || undefined);
+    const cacheKey = getNewsCacheKey(category || undefined, subCategory || undefined, skipGrok);
     const cached = newsCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < NEWS_CACHE_TTL) {
       return NextResponse.json({
@@ -58,51 +69,50 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Fetch RSS + NewsAPI in parallel, with a hard 7s timeout
+    // Fetch RSS + NewsAPI i parallelt, med timeout
     const [rssItems, newsApiItems] = await Promise.all([
-      withTimeout(fetchAllFeeds(), 7000, []),
-      withTimeout(fetchTopHeadlines('dk'), 5000, []),
+      withTimeout(fetchAllFeeds(), 8000, []),
+      withTimeout(fetchAllNewsAPI(), 6000, []),
     ]);
 
-    // Merge and deduplicate
-    let allItems = deduplicateItems([...rssItems, ...newsApiItems]);
+    // Merge og dedup
+    const allItems = deduplicateItems([...rssItems, ...newsApiItems]);
 
     if (allItems.length === 0) {
       return NextResponse.json({
         items: [],
         count: 0,
         fetchedAt: new Date().toISOString(),
+        sources: { rss: rssItems.length, newsapi: newsApiItems.length },
       });
     }
 
-    // Sort by date, newest first
+    // Sort by date, nyeste først
     allItems.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
-
-    // Limit to top 20 for performance
-    const topItems = allItems.slice(0, 20);
 
     let processedItems: NewsItem[];
 
     if (skipGrok || !process.env.GROK_API_KEY) {
-      processedItems = topItems;
+      processedItems = allItems;
     } else {
-      // Single batch categorization call to Grok (fast!) - with 8s timeout
+      // Grok batch-kategorisering af top 15 nyeste (single API call)
+      const topForGrok = allItems.slice(0, 15);
       const categorizations = await withTimeout(
         batchCategorize(
-          topItems.slice(0, 15).map(item => ({
+          topForGrok.map(item => ({
             title: item.title,
             content: item.description?.slice(0, 200),
           }))
         ),
-        8000,
+        12000,
         null
       ).catch(err => {
         console.error('Batch categorize failed:', err);
         return null;
       });
 
-      // Apply categorizations to the top 15
-      processedItems = topItems.map((item, index) => {
+      // Anvend kategoriseringer
+      processedItems = allItems.map((item, index) => {
         if (index >= 15 || !categorizations) return item;
         const cat = categorizations[index];
         if (!cat) return item;
@@ -119,7 +129,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Filter by requested category/subcategory
+    // Filtrér efter ønsket kategori
     let filteredItems = processedItems;
     if (category) {
       filteredItems = processedItems.filter(item => item.category === category);
@@ -127,6 +137,9 @@ export async function GET(request: NextRequest) {
     if (subCategory) {
       filteredItems = filteredItems.filter(item => item.subCategory === subCategory);
     }
+
+    // Sort by date
+    filteredItems.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
 
     // Cache
     newsCache.set(cacheKey, {
