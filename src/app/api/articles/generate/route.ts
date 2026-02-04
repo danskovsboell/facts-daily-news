@@ -85,6 +85,7 @@ const STATIC_INTEREST_KEYWORDS: Record<string, string[]> = {
   'Grøn Energi': ['grøn energi', 'green energy', 'vedvarende', 'renewable', 'solenergi', 'solar', 'vindenergi', 'wind power', 'vindmølle', 'bæredygtig', 'sustainable', 'klima', 'climate', 'co2', 'emission', 'elbil', 'electric vehicle', 'hydrogen', 'batteri'],
   'Økonomi & Finans': ['økonomi', 'economy', 'finans', 'finance', 'aktie', 'stock', 'marked', 'market', 'investering', 'investment', 'inflation', 'bnp', 'gdp', 'vækst', 'growth', 'handel', 'trade', 'valuta', 'currency', 'bank', 'børs'],
   'Renter': ['rente', 'interest rate', 'centralbank', 'central bank', 'ecb', 'nationalbanken', 'fed', 'federal reserve', 'pengepolitik', 'monetary', 'obligat', 'bond', 'realkredit', 'boliglån', 'mortgage'],
+  'Solceller': ['solcelle', 'solceller', 'solar panel', 'solar panels', 'solar energy', 'solenergi', 'solcelleanlæg', 'photovoltaic', 'pv-anlæg', 'tagsolceller', 'solcelleejere'],
 };
 
 /** Fetch all interest names from the DB (predefined + custom) for tagging */
