@@ -62,12 +62,13 @@ export async function fetchMediastackDK(
   }
 
   try {
+    // Mediastack free plan: no 'sort' param, limited 'countries'.
+    // Denmark ('dk') may return 0 results; fall back to keywords + EN sources.
     const params = new URLSearchParams({
       access_key: MEDIASTACK_KEY,
-      countries: 'dk',
-      languages: 'da',
+      keywords: 'Denmark,Danish,Copenhagen,Novo Nordisk,Mærsk',
+      languages: 'en',
       limit: String(limit),
-      sort: 'published_desc',
     });
 
     const response = await fetch(`${MEDIASTACK_BASE}/news?${params}`);
@@ -128,7 +129,6 @@ export async function fetchMediastackInternational(
       countries,
       languages: 'en',
       limit: String(limit),
-      sort: 'published_desc',
     });
     if (categories) params.set('categories', categories);
 
