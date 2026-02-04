@@ -4,9 +4,24 @@ import { useState, useEffect } from 'react';
 import InterestTags from '@/components/InterestTags';
 import { ALL_INTERESTS, DEFAULT_INTERESTS } from '@/lib/constants';
 
+type ApiStatus = 'active' | 'pending' | 'error' | 'loading';
+
+interface ApiStatuses {
+  rss: ApiStatus;
+  grok: ApiStatus;
+  newsapi: ApiStatus;
+  mediastack: ApiStatus;
+}
+
 export default function SettingsPage() {
   const [interests, setInterests] = useState<string[]>(DEFAULT_INTERESTS);
   const [saved, setSaved] = useState(false);
+  const [apiStatuses, setApiStatuses] = useState<ApiStatuses>({
+    rss: 'loading',
+    grok: 'loading',
+    newsapi: 'loading',
+    mediastack: 'loading',
+  });
 
   useEffect(() => {
     // Load from localStorage
@@ -18,6 +33,31 @@ export default function SettingsPage() {
         // ignore
       }
     }
+  }, []);
+
+  // Fetch API status from server-side route
+  useEffect(() => {
+    async function fetchStatus() {
+      try {
+        const res = await fetch('/api/status');
+        if (!res.ok) throw new Error('Failed to fetch status');
+        const data = await res.json();
+        setApiStatuses({
+          rss: data.rss || 'active',
+          grok: data.grok || 'pending',
+          newsapi: data.newsapi || 'pending',
+          mediastack: data.mediastack || 'pending',
+        });
+      } catch {
+        setApiStatuses({
+          rss: 'active',
+          grok: 'error',
+          newsapi: 'error',
+          mediastack: 'error',
+        });
+      }
+    }
+    fetchStatus();
   }, []);
 
   const handleToggle = (interest: string) => {
@@ -106,10 +146,10 @@ export default function SettingsPage() {
       <section className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
         <h2 className="text-lg font-semibold text-zinc-200">API Status</h2>
         <div className="mt-3 space-y-2">
-          <StatusRow label="RSS Feeds" status="active" />
-          <StatusRow label="Grok (xAI)" status="pending" />
-          <StatusRow label="NewsAPI" status="pending" />
-          <StatusRow label="Mediastack" status="pending" />
+          <StatusRow label="RSS Feeds" status={apiStatuses.rss} />
+          <StatusRow label="Grok (xAI)" status={apiStatuses.grok} />
+          <StatusRow label="NewsAPI" status={apiStatuses.newsapi} />
+          <StatusRow label="Mediastack" status={apiStatuses.mediastack} />
         </div>
       </section>
     </div>
@@ -121,12 +161,13 @@ function StatusRow({
   status,
 }: {
   label: string;
-  status: 'active' | 'pending' | 'error';
+  status: 'active' | 'pending' | 'error' | 'loading';
 }) {
   const statusConfig = {
     active: { dot: 'bg-green-500', text: 'Aktiv', textColor: 'text-green-400' },
     pending: { dot: 'bg-yellow-500', text: 'Afventer API nøgle', textColor: 'text-yellow-400' },
     error: { dot: 'bg-red-500', text: 'Fejl', textColor: 'text-red-400' },
+    loading: { dot: 'bg-zinc-500 animate-pulse', text: 'Tjekker...', textColor: 'text-zinc-500' },
   };
 
   const config = statusConfig[status];

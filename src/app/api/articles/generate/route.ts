@@ -188,6 +188,18 @@ REGLER:
 - Body skal være mindst 200 ord
 - interest_tags skal matche relevante emner fra listen: ${interestsList}
 
+KATEGORI-REGLER (category):
+- "danmark": Nyheder der primært handler om Danmark, dansk politik, danske virksomheder, danske personer
+- "europa": Nyheder om europæiske lande (UNDTAGEN Danmark), EU-politik, europæisk økonomi
+- "verden": Nyheder om resten af verden (USA, Asien, Mellemøsten, Afrika), globale emner
+- "sladder": Kendisnyheder, gossip, underholdning, reality TV, royalt sladder, kuriositeter, kulturelle kuriositeter, berømtheder, filmstjerner, musikere, sport-gossip. BRUG DENNE KATEGORI til alt der er underholdning/celebrity/gossip-relateret!
+
+UNDERKATEGORI-REGLER (sub_category):
+- "finans": Økonomi, aktier, valuta, virksomhedsnyheder, handelsnyheder, renter, boligmarked, centralbanker
+- "generelt": Alt der IKKE er finans/økonomi
+
+VIGTIGT OM SLADDER: Hvis kildematerialet handler om kendte personer, underholdning, popkultur, reality TV, royale familier, eller lignende let stof, SKAL category være "sladder" og is_gossip SKAL være true. Eksempler: Harry Potter-skuespillere, kendisskandaler, reality-deltagere, royalt sladder.
+
 SVAR I JSON FORMAT:
 {
   "title": "...",

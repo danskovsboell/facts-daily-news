@@ -221,16 +221,16 @@ Returnér et JSON-objekt med PRÆCIS dette format:
 }
 
 Kategori-regler:
-- "danmark": Nyheder om Danmark, danske personer, dansk politik, danske virksomheder
-- "europa": Nyheder om europæiske lande (undtagen Danmark), EU, europæisk politik
+- "danmark": Nyheder der primært handler om Danmark, dansk politik, danske virksomheder, danske personer
+- "europa": Nyheder om europæiske lande (UNDTAGEN Danmark), EU, europæisk politik
 - "verden": Nyheder om resten af verden, globale emner
-- "sladder": Kendisnyheder, gossip, underholdning, reality TV, royalt sladder, kuriositeter
+- "sladder": Kendisnyheder, gossip, underholdning, reality TV, royalt sladder, kuriositeter, popkultur, berømtheder, filmstjerner, musikere. BRUG DENNE KATEGORI når nyheden handler om kendte personer i ikke-politisk/ikke-erhvervsmæssig kontekst, underholdningsindustrien, eller kulturelle kuriositeter.
 
 SubCategory-regler:
 - "finans": Økonomi, aktier, valuta, virksomhedsnyheder, handelsnyheder, renter, boligmarked
-- "generelt": Alt andet
+- "generelt": Alt der IKKE er økonomi/finans
 
-isGossip = true for: kendisnyheder, underholdning, reality, sladder, kuriositeter, sport-gossip`;
+VIGTIGT: isGossip = true OG category = "sladder" for: kendisnyheder, underholdning, reality, sladder, kuriositeter, sport-gossip, popkultur, berømthedsnyheder`;
 
     const userMessage = `${title}\n\n${content || ''}`.slice(0, 1000);
 
@@ -287,17 +287,18 @@ export async function batchCategorize(
 Format: {"results":[{"category":"...", "subCategory":"...", "region":"...", "isGossip":false, "confidence":85}, ...]}
 
 category (vælg ÉN):
-• "danmark" – handler om Danmark, danske personer/virksomheder (Novo Nordisk, Mette Frederiksen, DR, danske byer osv.)
+• "danmark" – handler om Danmark, dansk politik, danske virksomheder (Novo Nordisk, Mette Frederiksen, DR, danske byer osv.)
 • "europa" – europæiske lande UNDTAGEN Danmark, EU-politik
 • "verden" – USA, Asien, Mellemøsten, Afrika, globalt
-• "sladder" – kendis, underholdning, reality, royalt sladder
+• "sladder" – kendis, underholdning, reality, royalt sladder, popkultur, berømtheder, filmstjerner, musikere, kuriositeter. BRUG DENNE for alt underholdnings-/celebrity-relateret!
 
 subCategory: "finans" for økonomi/aktier/business/valuta/renter, ellers "generelt"
 region: landet/området nyheden handler om (f.eks. "Danmark", "USA", "EU", "Kina")
-isGossip: true KUN for underholdning/kendisnyheder
+isGossip: true for underholdning/kendisnyheder/popkultur/kuriositeter (SÆT OGSÅ category til "sladder")
 confidence: 70-95 for tydelige, 50-69 for tvetydige
 
-VIGTIGT: Overskrifter på dansk handler OFTE om Danmark – check om de nævner danske emner!`;
+VIGTIGT: Overskrifter på dansk handler OFTE om Danmark – check om de nævner danske emner!
+VIGTIGT: Nyheder om kendte personer, underholdning, popkultur SKAL kategoriseres som "sladder" med isGossip=true!`;
 
     const numberedItems = items
       .map((item, i) => `${i + 1}. ${item.title}`)
