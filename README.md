@@ -8,9 +8,9 @@ AI-drevet nyhedsdashboard med fakta-check via Grok (xAI). Samler nyheder fra dan
 
 ## ✨ Features
 
-- 🇩🇰 **Danske nyheder** — DR, TV2, Børsen
-- 🇪🇺 **Europæiske nyheder** — Reuters, BBC, The Guardian
-- 🌍 **Verdensnyheder** — AP News, Bloomberg
+- 🇩🇰 **Danske nyheder** — DR, TV2, Berlingske, Politiken, Jyllands-Posten, Børsen
+- 🇪🇺 **Europæiske nyheder** — BBC, Deutsche Welle, The Guardian, Financial Times
+- 🌍 **Verdensnyheder** — AP News, Al Jazeera, BBC World, Bloomberg, Reuters Business
 - 🤖 **AI fakta-check** — Troværdighedsscore via Grok (xAI)
 - 🏷️ **Interessefiltre** — Tilpas dit feed (Tesla, AI, Grøn Energi, m.m.)
 - 📱 **Mobile-first** — Responsivt design med mørkt tema
@@ -101,7 +101,7 @@ src/
 
 ### V1 (Current) ✅
 - [x] Next.js + TypeScript + Tailwind setup
-- [x] RSS feed parser (DR, TV2, Børsen, BBC, Reuters, AP, Bloomberg)
+- [x] RSS feed parser (DR, TV2, Berlingske, Politiken, JP, Børsen, BBC, DW, Guardian, FT, AP, Al Jazeera, Bloomberg, Reuters)
 - [x] Kategori-navigation (Danmark, Europa, Verden, Sladder)
 - [x] Under-kategorier (Generelt, Finans & Business)
 - [x] NewsCard med kilde og tidspunkt

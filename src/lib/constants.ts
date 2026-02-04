@@ -41,7 +41,7 @@ export const ALL_INTERESTS = [
 ];
 
 export const FEED_SOURCES: FeedSource[] = [
-  // Danmark - Generelt
+  // ===== DANMARK - Generelt =====
   {
     name: 'DR Nyheder',
     url: 'https://www.dr.dk/nyheder/service/feeds/senestenyt',
@@ -56,7 +56,28 @@ export const FEED_SOURCES: FeedSource[] = [
     subCategory: 'generelt',
     language: 'da',
   },
-  // Danmark - Finans
+  {
+    name: 'Berlingske',
+    url: 'https://www.berlingske.dk/content/rss',
+    category: 'danmark',
+    subCategory: 'generelt',
+    language: 'da',
+  },
+  {
+    name: 'Politiken',
+    url: 'https://politiken.dk/rss/senestenyt.rss',
+    category: 'danmark',
+    subCategory: 'generelt',
+    language: 'da',
+  },
+  {
+    name: 'Jyllands-Posten',
+    url: 'https://feeds.jp.dk/jp/seneste',
+    category: 'danmark',
+    subCategory: 'generelt',
+    language: 'da',
+  },
+  // ===== DANMARK - Finans =====
   {
     name: 'Børsen',
     url: 'https://borsen.dk/rss',
@@ -64,17 +85,17 @@ export const FEED_SOURCES: FeedSource[] = [
     subCategory: 'finans',
     language: 'da',
   },
-  // Europa - Generelt
+  // ===== EUROPA - Generelt =====
   {
-    name: 'Reuters Europe',
-    url: 'https://feeds.reuters.com/reuters/UKdomesticNews',
+    name: 'BBC News',
+    url: 'https://feeds.bbci.co.uk/news/world/europe/rss.xml',
     category: 'europa',
     subCategory: 'generelt',
     language: 'en',
   },
   {
-    name: 'BBC News',
-    url: 'https://feeds.bbci.co.uk/news/world/europe/rss.xml',
+    name: 'Deutsche Welle',
+    url: 'https://rss.dw.com/xml/rss-en-eu',
     category: 'europa',
     subCategory: 'generelt',
     language: 'en',
@@ -86,15 +107,15 @@ export const FEED_SOURCES: FeedSource[] = [
     subCategory: 'generelt',
     language: 'en',
   },
-  // Europa - Finans
+  // ===== EUROPA - Finans =====
   {
-    name: 'Reuters Business',
-    url: 'https://feeds.reuters.com/reuters/businessNews',
+    name: 'Financial Times',
+    url: 'https://www.ft.com/rss/home',
     category: 'europa',
     subCategory: 'finans',
     language: 'en',
   },
-  // Verden - Generelt
+  // ===== VERDEN - Generelt =====
   {
     name: 'AP News',
     url: 'https://rsshub.app/apnews/topics/apf-topnews',
@@ -109,7 +130,14 @@ export const FEED_SOURCES: FeedSource[] = [
     subCategory: 'generelt',
     language: 'en',
   },
-  // Verden - Finans
+  {
+    name: 'Al Jazeera',
+    url: 'https://www.aljazeera.com/xml/rss/all.xml',
+    category: 'verden',
+    subCategory: 'generelt',
+    language: 'en',
+  },
+  // ===== VERDEN - Finans =====
   {
     name: 'Bloomberg',
     url: 'https://feeds.bloomberg.com/markets/news.rss',
@@ -117,7 +145,14 @@ export const FEED_SOURCES: FeedSource[] = [
     subCategory: 'finans',
     language: 'en',
   },
-  // Sladder
+  {
+    name: 'Reuters Business',
+    url: 'https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best',
+    category: 'verden',
+    subCategory: 'finans',
+    language: 'en',
+  },
+  // ===== SLADDER =====
   {
     name: 'DR Kultur',
     url: 'https://www.dr.dk/nyheder/service/feeds/kultur',
