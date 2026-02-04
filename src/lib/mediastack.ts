@@ -65,7 +65,8 @@ export async function fetchMediastackDK(
     // Mediastack free plan: no 'sort' param, limited 'countries'.
     // Denmark ('dk') may return 0 results; fall back to keywords + EN sources.
     // NOTE: Mediastack requires literal commas in keywords (not URL-encoded %2C).
-    const url = `${MEDIASTACK_BASE}/news?access_key=${MEDIASTACK_KEY}&keywords=Denmark,Danish,Copenhagen,Novo Nordisk&languages=en&limit=${limit}`;
+    // NOTE: No spaces in keywords (breaks Mediastack API via Node fetch)
+    const url = `${MEDIASTACK_BASE}/news?access_key=${MEDIASTACK_KEY}&keywords=Denmark,Danish,Copenhagen,Novo,Nordisk,Maersk&languages=en&limit=${limit}`;
 
     const response = await fetch(url);
 
