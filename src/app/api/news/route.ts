@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchAllFeeds } from '@/lib/rss';
+import { fetchTopHeadlines } from '@/lib/newsapi';
 import { batchCategorize } from '@/lib/grok';
 import { Category, SubCategory, NewsItem } from '@/lib/types';
 
@@ -19,6 +20,25 @@ function getNewsCacheKey(category?: string, subCategory?: string): string {
   return `${category || 'all'}::${subCategory || 'all'}`;
 }
 
+// Dedup by title similarity
+function deduplicateItems(items: NewsItem[]): NewsItem[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = item.title.toLowerCase().replace(/[^a-zæøå0-9]/g, '').slice(0, 60);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+// Race a promise against a timeout
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -26,7 +46,7 @@ export async function GET(request: NextRequest) {
     const subCategory = searchParams.get('subCategory') as SubCategory | null;
     const skipGrok = searchParams.get('skipGrok') === 'true';
 
-    // Check cache
+    // Check cache first
     const cacheKey = getNewsCacheKey(category || undefined, subCategory || undefined);
     const cached = newsCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < NEWS_CACHE_TTL) {
@@ -38,8 +58,14 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Fetch RSS feeds (no category filter yet - we want Grok to recategorize)
-    const allItems = await fetchAllFeeds();
+    // Fetch RSS + NewsAPI in parallel, with a hard 7s timeout
+    const [rssItems, newsApiItems] = await Promise.all([
+      withTimeout(fetchAllFeeds(), 7000, []),
+      withTimeout(fetchTopHeadlines('dk'), 5000, []),
+    ]);
+
+    // Merge and deduplicate
+    let allItems = deduplicateItems([...rssItems, ...newsApiItems]);
 
     if (allItems.length === 0) {
       return NextResponse.json({
@@ -49,28 +75,36 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Limit to top 15 newest items for categorization (keeps Grok call fast)
-    const topItems = allItems.slice(0, 15);
+    // Sort by date, newest first
+    allItems.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
+
+    // Limit to top 20 for performance
+    const topItems = allItems.slice(0, 20);
 
     let processedItems: NewsItem[];
 
     if (skipGrok || !process.env.GROK_API_KEY) {
-      processedItems = allItems;
+      processedItems = topItems;
     } else {
-      // Single batch categorization call to Grok (fast!)
-      const categorizations = await batchCategorize(
-        topItems.map(item => ({
-          title: item.title,
-          content: item.description?.slice(0, 200),
-        }))
+      // Single batch categorization call to Grok (fast!) - with 8s timeout
+      const categorizations = await withTimeout(
+        batchCategorize(
+          topItems.slice(0, 15).map(item => ({
+            title: item.title,
+            content: item.description?.slice(0, 200),
+          }))
+        ),
+        8000,
+        null
       ).catch(err => {
         console.error('Batch categorize failed:', err);
         return null;
       });
 
-      // Apply categorizations
+      // Apply categorizations to the top 15
       processedItems = topItems.map((item, index) => {
-        const cat = categorizations?.[index];
+        if (index >= 15 || !categorizations) return item;
+        const cat = categorizations[index];
         if (!cat) return item;
 
         return {
@@ -79,19 +113,13 @@ export async function GET(request: NextRequest) {
           grokSubCategory: cat.subCategory,
           isGossip: cat.isGossip,
           region: cat.region,
-          // Grok overrides category if confident
           category: cat.confidence > 60 ? cat.category : item.category,
           subCategory: cat.confidence > 60 ? cat.subCategory : item.subCategory,
         };
       });
-
-      // Add remaining items (beyond top 15) with original categories
-      if (allItems.length > 15) {
-        processedItems.push(...allItems.slice(15));
-      }
     }
 
-    // Now filter by requested category
+    // Filter by requested category/subcategory
     let filteredItems = processedItems;
     if (category) {
       filteredItems = processedItems.filter(item => item.category === category);
@@ -100,10 +128,7 @@ export async function GET(request: NextRequest) {
       filteredItems = filteredItems.filter(item => item.subCategory === subCategory);
     }
 
-    // Sort by date
-    filteredItems.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
-
-    // Cache all categories at once
+    // Cache
     newsCache.set(cacheKey, {
       items: filteredItems,
       timestamp: Date.now(),
@@ -114,6 +139,7 @@ export async function GET(request: NextRequest) {
       count: filteredItems.length,
       fetchedAt: new Date().toISOString(),
       grokEnabled: !!process.env.GROK_API_KEY,
+      sources: { rss: rssItems.length, newsapi: newsApiItems.length },
     });
   } catch (error) {
     console.error('News API error:', error);

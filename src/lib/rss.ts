@@ -3,7 +3,7 @@ import { NewsItem, FeedSource, Category, SubCategory } from './types';
 import { FEED_SOURCES } from './constants';
 
 const parser = new Parser({
-  timeout: 10000,
+  timeout: 5000, // 5s timeout per feed (strict for Vercel)
   headers: {
     'User-Agent': 'FactsDailyNews/1.0',
   },
