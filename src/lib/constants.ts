@@ -4,9 +4,9 @@ export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'Facts on Daily News
 
 export const TABS: TabItem[] = [
   { id: 'dine-nyheder', label: '⭐ Dine Nyheder' },
-  { id: 'danmark', label: 'Danmark' },
-  { id: 'europa', label: 'Europa' },
-  { id: 'verden', label: 'Verden' },
+  { id: 'danmark', label: '🇩🇰 Danmark' },
+  { id: 'europa', label: '🇪🇺 Europa' },
+  { id: 'verden', label: '🌍 Verden' },
   { id: 'sladder', label: 'Sludder & Sladder' },
 ];
 
