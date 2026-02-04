@@ -86,6 +86,12 @@ export interface ArticleSource {
 export interface ArticleFactDetails {
   claims: Claim[];
   sources_checked: string[];
+  // Enhanced fields (set by on-demand fact-check)
+  sourceLinks?: SourceLink[];
+  sourcesConsulted?: number;
+  verificationMethod?: 'web-search' | 'ai-only';
+  summary?: string;
+  checkedAt?: string;
 }
 
 export interface Article {

@@ -7,6 +7,7 @@ import { FactCheckResult, SourceLink } from '@/lib/types';
 interface FactScoreProps {
   score?: number;
   details?: FactCheckResult;
+  articleId?: string;
   articleTitle?: string;
   articleContent?: string;
   articleSource?: string;
@@ -66,24 +67,34 @@ function SourceLinkChip({ source }: { source: SourceLink }) {
   );
 }
 
-export default function FactScore({ score: initialScore, details: initialDetails, articleTitle, articleContent, articleSource }: FactScoreProps) {
+export default function FactScore({ score: initialScore, details: initialDetails, articleId, articleTitle, articleContent, articleSource }: FactScoreProps) {
   const [showDetails, setShowDetails] = useState(false);
   const [loading, setLoading] = useState(false);
   const [score, setScore] = useState(initialScore);
   const [details, setDetails] = useState(initialDetails);
 
-  // Fetch fact-check on demand
+  // Fetch fact-check on demand (initial check)
   const handleFactCheck = async () => {
     if (details && details.claims.length > 0) {
       setShowDetails(!showDetails);
       return;
     }
 
-    if (!articleTitle) {
+    if (!articleId && !articleTitle) {
       if (details) setShowDetails(!showDetails);
       return;
     }
 
+    await runFactCheck(false);
+  };
+
+  // Force re-check (bypass cache, always call API)
+  const handleReCheck = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    await runFactCheck(true);
+  };
+
+  const runFactCheck = async (force: boolean) => {
     setLoading(true);
     setShowDetails(true);
     try {
@@ -91,9 +102,11 @@ export default function FactScore({ score: initialScore, details: initialDetails
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: articleTitle,
+          articleId: articleId || undefined,
+          title: articleTitle || '',
           content: articleContent || '',
           source: articleSource || 'unknown',
+          force,
         }),
       });
       if (response.ok) {
@@ -160,28 +173,60 @@ export default function FactScore({ score: initialScore, details: initialDetails
 
   return (
     <div className="relative">
-      <button
-        onClick={handleFactCheck}
-        disabled={loading}
-        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer hover:brightness-110 ${colors.bg} ${colors.text} ${colors.border}`}
-        title="Klik for fakta-check detaljer"
-      >
-        {loading ? (
-          <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-        ) : (
-          <span className="text-[10px]">
-            {level === 'high' ? '🟢' : level === 'medium' ? '🟡' : level === 'low' ? '🔴' : '❓'}
-          </span>
-        )}
-        Fakta: {score >= 0 ? `${score}%` : 'N/A'}
-        {details?.sourcesConsulted && details.sourcesConsulted > 0 && (
-          <span className="ml-0.5 text-[10px] opacity-70">
-            ({details.sourcesConsulted} kilder)
-          </span>
-        )}
-      </button>
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={handleFactCheck}
+          disabled={loading}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer hover:brightness-110 ${colors.bg} ${colors.text} ${colors.border}`}
+          title="Klik for fakta-check detaljer"
+        >
+          {loading ? (
+            <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          ) : (
+            <span className="text-[10px]">
+              {level === 'high' ? '🟢' : level === 'medium' ? '🟡' : level === 'low' ? '🔴' : '❓'}
+            </span>
+          )}
+          Fakta: {score >= 0 ? `${score}%` : 'N/A'}
+          {details?.sourcesConsulted && details.sourcesConsulted > 0 && (
+            <span className="ml-0.5 text-[10px] opacity-70">
+              ({details.sourcesConsulted} kilder)
+            </span>
+          )}
+        </button>
+        <button
+          onClick={handleReCheck}
+          disabled={loading}
+          className="inline-flex items-center gap-1 rounded-full border border-zinc-700 bg-zinc-800/80 px-2 py-1 text-[10px] text-zinc-400 transition-all cursor-pointer hover:border-accent-500/50 hover:text-accent-400 hover:bg-zinc-800 disabled:opacity-50"
+          title="Kør nyt fakta-tjek med websøgning"
+        >
+          {loading ? (
+            <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border-2 border-accent-400 border-t-transparent" />
+          ) : (
+            '🔄'
+          )}
+          Tjek igen
+        </button>
+      </div>
 
-      {showDetails && details && (
+      {showDetails && loading && (
+        <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-zinc-700 bg-zinc-900 p-4 shadow-2xl">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
+              <span className="text-xs text-zinc-400">Grok AI søger på nettet...</span>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent-500/50" />
+                Re-verificerer med websøgning...
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDetails && !loading && details && (
         <DetailsPopup details={details} onClose={() => setShowDetails(false)} />
       )}
     </div>
@@ -196,10 +241,15 @@ function DetailsPopup({ details, onClose }: { details: FactCheckResult; onClose:
       {/* Header with source count */}
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <h4 className="text-sm font-bold text-[#c5c5c5]">🔍 Dyb Fakta-check</h4>
+          <h4 className="text-sm font-bold text-[#c5c5c5]">🔍 Fakta-check</h4>
           {details.verificationMethod === 'web-search' && (
-            <span className="rounded-full bg-accent-500/20 px-1.5 py-0.5 text-[9px] font-medium text-accent-400">
-              WEB VERIFICERET
+            <span className="rounded-full bg-green-500/20 border border-green-500/30 px-2 py-0.5 text-[9px] font-bold text-green-400 uppercase tracking-wider">
+              🌐 Web Verificeret
+            </span>
+          )}
+          {details.verificationMethod === 'ai-only' && (
+            <span className="rounded-full bg-yellow-500/20 border border-yellow-500/30 px-2 py-0.5 text-[9px] font-medium text-yellow-400">
+              🤖 AI-vurdering
             </span>
           )}
         </div>

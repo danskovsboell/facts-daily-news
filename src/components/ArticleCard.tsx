@@ -57,21 +57,23 @@ export default function ArticleCard({ article }: ArticleCardProps) {
               {timeAgo(article.news_date || article.created_at)}
             </span>
           </div>
-          {article.fact_score != null && article.fact_score >= 0 && (
-            <FactScore
-              score={article.fact_score}
-              details={article.fact_details ? {
-                score: article.fact_score,
-                summary: `Fakta-score: ${article.fact_score}/100`,
-                claims: article.fact_details.claims || [],
-                sources: article.fact_details.sources_checked || [],
-                checkedAt: article.created_at,
-              } : undefined}
-              articleTitle={article.title}
-              articleContent={article.summary}
-              articleSource={article.sources?.[0]?.source_name || 'AI-genereret'}
-            />
-          )}
+          <FactScore
+            score={article.fact_score != null && article.fact_score >= 0 ? article.fact_score : undefined}
+            details={article.fact_details ? {
+              score: article.fact_score,
+              summary: article.fact_details.summary || `Fakta-score: ${article.fact_score}/100`,
+              claims: article.fact_details.claims || [],
+              sources: article.fact_details.sources_checked || [],
+              sourceLinks: article.fact_details.sourceLinks || [],
+              sourcesConsulted: article.fact_details.sourcesConsulted || 0,
+              verificationMethod: article.fact_details.verificationMethod || undefined,
+              checkedAt: article.fact_details.checkedAt || article.created_at,
+            } : undefined}
+            articleId={article.id}
+            articleTitle={article.title}
+            articleContent={article.summary}
+            articleSource={article.sources?.[0]?.source_name || 'AI-genereret'}
+          />
         </div>
 
         {/* Title */}

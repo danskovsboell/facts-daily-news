@@ -156,6 +156,43 @@ export default function ArticlePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showFactDetails, setShowFactDetails] = useState(false);
+  const [factChecking, setFactChecking] = useState(false);
+
+  const handleFactCheck = async (force: boolean = false) => {
+    if (!article) return;
+    setFactChecking(true);
+    try {
+      const response = await fetch('/api/factcheck', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          articleId: article.id,
+          force,
+        }),
+      });
+      if (response.ok) {
+        const result = await response.json();
+        setArticle(prev => prev ? {
+          ...prev,
+          fact_score: result.score,
+          fact_details: {
+            claims: result.claims || [],
+            sources_checked: result.sources || [],
+            sourceLinks: result.sourceLinks || [],
+            sourcesConsulted: result.sourcesConsulted || 0,
+            verificationMethod: result.verificationMethod || 'web-search',
+            summary: result.summary || '',
+            checkedAt: result.checkedAt,
+          },
+        } : null);
+        setShowFactDetails(true);
+      }
+    } catch (err) {
+      console.error('Fact-check failed:', err);
+    } finally {
+      setFactChecking(false);
+    }
+  };
 
   useEffect(() => {
     async function fetchArticle() {
@@ -215,88 +252,189 @@ export default function ArticlePage() {
 
       {/* ===== METADATA SECTION (moved to top) ===== */}
       <div className="mb-8 space-y-4">
-        {/* Fact score + AI badge */}
-        {article.fact_score != null && article.fact_score >= 0 && (
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <FactScoreBadge score={article.fact_score} />
-                <div>
-                  <span className="text-sm text-zinc-500">AI Fakta-vurdering</span>
-                  {article.fact_details?.sources_checked && article.fact_details.sources_checked.length > 0 && (
-                    <span className="ml-2 text-[11px] text-accent-400">
-                      🌐 {article.fact_details.sources_checked.length} kilder verificeret
-                    </span>
+        {/* Fact score + fact-check buttons */}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+          {article.fact_score != null && article.fact_score >= 0 ? (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <FactScoreBadge score={article.fact_score} />
+                  <div>
+                    <span className="text-sm text-zinc-500">AI Fakta-vurdering</span>
+                    {article.fact_details?.verificationMethod === 'web-search' && (
+                      <span className="ml-2 rounded-full bg-green-500/20 border border-green-500/30 px-2 py-0.5 text-[9px] font-bold text-green-400 uppercase tracking-wider">
+                        🌐 Web Verificeret
+                      </span>
+                    )}
+                    {article.fact_details?.sources_checked && article.fact_details.sources_checked.length > 0 && (
+                      <span className="ml-2 text-[11px] text-accent-400">
+                        {article.fact_details.sources_checked.length} kilder
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleFactCheck(true)}
+                    disabled={factChecking}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-400 transition-all hover:border-accent-500/50 hover:text-accent-400 hover:bg-zinc-800/80 disabled:opacity-50"
+                  >
+                    {factChecking ? (
+                      <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-accent-400 border-t-transparent" />
+                    ) : (
+                      '🔄'
+                    )}
+                    Tjek igen
+                  </button>
+                  {article.fact_details && article.fact_details.claims?.length > 0 && (
+                    <button
+                      onClick={() => setShowFactDetails(!showFactDetails)}
+                      className="text-xs text-accent-500 hover:text-accent-400 transition-colors"
+                    >
+                      {showFactDetails ? 'Skjul detaljer' : 'Vis detaljer'}
+                    </button>
                   )}
                 </div>
               </div>
-              {article.fact_details && article.fact_details.claims?.length > 0 && (
-                <button
-                  onClick={() => setShowFactDetails(!showFactDetails)}
-                  className="text-xs text-accent-500 hover:text-accent-400 transition-colors"
-                >
-                  {showFactDetails ? 'Skjul detaljer' : 'Vis detaljer'}
-                </button>
-              )}
-            </div>
 
-            {showFactDetails && article.fact_details && (
-              <div className="mt-4 space-y-3 border-t border-zinc-800 pt-4">
-                {/* Claims */}
-                {article.fact_details.claims?.map((claim, i) => (
-                  <div key={i} className="rounded-lg bg-zinc-800/50 border border-zinc-700/50 p-3">
-                    <div className="flex items-start gap-2">
-                      <span className="mt-0.5 text-sm shrink-0">
-                        {getVerdictEmoji(claim.verdict)}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className={`text-xs font-semibold ${getVerdictColor(claim.verdict)}`}>
-                            {getVerdictLabel(claim.verdict)}
-                          </span>
-                        </div>
-                        <p className="text-sm font-medium text-zinc-300">{claim.text}</p>
-                        <p className="mt-1 text-xs text-zinc-500">{claim.explanation}</p>
-                        {/* Per-claim sources */}
-                        {claim.claimSources && claim.claimSources.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {claim.claimSources.slice(0, 4).map((src, j) => (
-                              <a
-                                key={j}
-                                href={src.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 rounded-full bg-zinc-700/50 px-2 py-0.5 text-[10px] text-accent-400 hover:bg-zinc-700 hover:text-accent-300 transition-colors"
-                              >
-                                🔗 {src.domain || 'Kilde'}
-                              </a>
-                            ))}
+              {factChecking && (
+                <div className="mt-4 flex items-center gap-3 rounded-lg bg-accent-500/10 border border-accent-500/20 px-4 py-3">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
+                  <div>
+                    <span className="text-sm font-medium text-accent-400">Grok AI søger på nettet...</span>
+                    <p className="text-[11px] text-zinc-500 mt-0.5">Fakta-checker med websøgning — kan tage 10-30 sekunder</p>
+                  </div>
+                </div>
+              )}
+
+              {showFactDetails && article.fact_details && (
+                <div className="mt-4 space-y-3 border-t border-zinc-800 pt-4">
+                  {/* Summary */}
+                  {article.fact_details.summary && (
+                    <p className="text-sm text-zinc-400 leading-relaxed">
+                      {article.fact_details.summary}
+                    </p>
+                  )}
+
+                  {/* Claims */}
+                  {article.fact_details.claims?.map((claim, i) => (
+                    <div key={i} className="rounded-lg bg-zinc-800/50 border border-zinc-700/50 p-3">
+                      <div className="flex items-start gap-2">
+                        <span className="mt-0.5 text-sm shrink-0">
+                          {getVerdictEmoji(claim.verdict)}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className={`text-xs font-semibold ${getVerdictColor(claim.verdict)}`}>
+                              {getVerdictLabel(claim.verdict)}
+                            </span>
                           </div>
-                        )}
+                          <p className="text-sm font-medium text-zinc-300">{claim.text}</p>
+                          <p className="mt-1 text-xs text-zinc-500">{claim.explanation}</p>
+                          {/* Per-claim sources */}
+                          {claim.claimSources && claim.claimSources.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {claim.claimSources.slice(0, 4).map((src, j) => (
+                                <a
+                                  key={j}
+                                  href={src.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 rounded-full bg-zinc-700/50 px-2 py-0.5 text-[10px] text-accent-400 hover:bg-zinc-700 hover:text-accent-300 transition-colors"
+                                >
+                                  🔗 {src.domain || 'Kilde'}
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
 
-                {/* Sources checked */}
-                {article.fact_details.sources_checked && article.fact_details.sources_checked.length > 0 && (
-                  <div className="rounded-lg bg-zinc-800/30 p-3 mt-2">
-                    <h5 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mb-2">
-                      Kilder verificeret mod ({article.fact_details.sources_checked.length})
-                    </h5>
-                    <div className="flex flex-wrap gap-1.5">
-                      {article.fact_details.sources_checked.map((src, i) => (
-                        <span key={i} className="rounded-full bg-zinc-700/50 px-2 py-0.5 text-[10px] text-zinc-400">
-                          📎 {src}
-                        </span>
-                      ))}
+                  {/* Source links from web verification */}
+                  {article.fact_details.sourceLinks && article.fact_details.sourceLinks.length > 0 && (
+                    <div className="rounded-lg bg-zinc-800/30 p-3 mt-2">
+                      <h5 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mb-2">
+                        Webkilder ({article.fact_details.sourceLinks.length})
+                      </h5>
+                      <div className="max-h-32 overflow-y-auto space-y-1">
+                        {article.fact_details.sourceLinks.map((src, i) => (
+                          <a
+                            key={i}
+                            href={src.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 text-[11px] text-zinc-400 hover:text-accent-400 transition-colors truncate"
+                          >
+                            <span className="text-zinc-600 shrink-0">📎</span>
+                            <span className="font-medium text-zinc-300 shrink-0">{src.domain}</span>
+                            <span className="truncate opacity-60">{src.url}</span>
+                          </a>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+
+                  {/* Legacy sources checked (backward compat) */}
+                  {!article.fact_details.sourceLinks && article.fact_details.sources_checked && article.fact_details.sources_checked.length > 0 && (
+                    <div className="rounded-lg bg-zinc-800/30 p-3 mt-2">
+                      <h5 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mb-2">
+                        Kilder verificeret mod ({article.fact_details.sources_checked.length})
+                      </h5>
+                      <div className="flex flex-wrap gap-1.5">
+                        {article.fact_details.sources_checked.map((src, i) => (
+                          <span key={i} className="rounded-full bg-zinc-700/50 px-2 py-0.5 text-[10px] text-zinc-400">
+                            📎 {src}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            /* No fact score yet - show fact-check button */
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800/50 px-3 py-1.5">
+                  <span className="text-lg">❓</span>
+                  <span className="text-xs text-zinc-500">Ikke fakta-tjekket</span>
+                </div>
               </div>
-            )}
-          </div>
-        )}
+              <button
+                onClick={() => handleFactCheck(false)}
+                disabled={factChecking}
+                className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
+                  factChecking
+                    ? 'border-accent-500/30 bg-accent-500/10 text-accent-400'
+                    : 'border-accent-500/40 bg-accent-500/10 text-accent-400 hover:bg-accent-500/20 hover:border-accent-500/60'
+                }`}
+              >
+                {factChecking ? (
+                  <>
+                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-accent-400 border-t-transparent" />
+                    Websøgning...
+                  </>
+                ) : (
+                  <>🔍 Fakta-tjek</>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Loading state for no-score articles */}
+          {factChecking && !(article.fact_score != null && article.fact_score >= 0) && (
+            <div className="mt-4 flex items-center gap-3 rounded-lg bg-accent-500/10 border border-accent-500/20 px-4 py-3">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
+              <div>
+                <span className="text-sm font-medium text-accent-400">Grok AI søger på nettet...</span>
+                <p className="text-[11px] text-zinc-500 mt-0.5">Verificerer fakta med websøgning — kan tage 10-30 sekunder</p>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Interest tags */}
         {article.interest_tags && article.interest_tags.length > 0 && (

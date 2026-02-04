@@ -186,13 +186,16 @@ function extractDomain(url: string): string {
 export async function factCheck(
   title: string,
   content: string,
-  source: string
+  source: string,
+  force?: boolean
 ): Promise<FactCheckResult> {
-  // Check cache first
+  // Check cache first (skip if force=true)
   const cacheKey = getCacheKey(title, source);
-  const cached = getFromCache(factCheckCache, cacheKey);
-  if (cached) {
-    return cached;
+  if (!force) {
+    const cached = getFromCache(factCheckCache, cacheKey);
+    if (cached) {
+      return cached;
+    }
   }
 
   if (!GROK_API_KEY) {
