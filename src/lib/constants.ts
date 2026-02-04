@@ -145,24 +145,10 @@ export const FEED_SOURCES: FeedSource[] = [
     subCategory: 'finans',
     language: 'en',
   },
-  {
-    name: 'Reuters Business',
-    url: 'https://feeds.reuters.com/reuters/businessNews',
-    // Note: Reuters discontinued public RSS feeds in 2023.
-    // This feed is configured as a placeholder per spec.
-    // Bloomberg and Financial Times serve as primary finance sources.
-    category: 'verden',
-    subCategory: 'finans',
-    language: 'en',
-  },
-  // ===== SLADDER =====
-  {
-    name: 'DR Kultur',
-    url: 'https://www.dr.dk/nyheder/service/feeds/kultur',
-    category: 'sladder',
-    subCategory: 'generelt',
-    language: 'da',
-  },
+  // Reuters Business feed fjernet – Reuters lukkede sine offentlige RSS feeds i 2023.
+  // Bloomberg og Financial Times dækker finans-verden.
+  // Sladder hentes ikke aktivt fra specifikke feeds.
+  // Grok kategoriserer automatisk lette/uvæsentlige nyheder som "sladder".
 ];
 
 export const FACT_SCORE_COLORS = {

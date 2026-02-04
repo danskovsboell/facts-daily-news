@@ -211,13 +211,7 @@ export async function fetchAllNewsAPI(): Promise<NewsItem[]> {
       subCategory: 'finans',
     }),
 
-    // Everything – sladder/underholdning
-    fetchEverything('celebrity OR entertainment OR gossip', {
-      language: 'en',
-      pageSize: 8,
-      category: 'sladder',
-      subCategory: 'generelt',
-    }),
+    // Sladder hentes ikke aktivt – Grok kategoriserer lette/uvæsentlige nyheder som "sladder"
   ]);
 
   const allItems: NewsItem[] = [];

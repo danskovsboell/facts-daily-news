@@ -224,13 +224,13 @@ Kategori-regler:
 - "danmark": Nyheder der primært handler om Danmark, dansk politik, danske virksomheder, danske personer
 - "europa": Nyheder om europæiske lande (UNDTAGEN Danmark), EU, europæisk politik
 - "verden": Nyheder om resten af verden, globale emner
-- "sladder": Kendisnyheder, gossip, underholdning, reality TV, royalt sladder, kuriositeter, popkultur, berømtheder, filmstjerner, musikere. BRUG DENNE KATEGORI når nyheden handler om kendte personer i ikke-politisk/ikke-erhvervsmæssig kontekst, underholdningsindustrien, eller kulturelle kuriositeter.
+- "sladder": Lette, ligegyldige eller uvæsentlige nyheder. Brug denne kategori for nyheder der IKKE passer ind i de seriøse kategorier – f.eks. kuriositeter, underholdning, "soft news", ligegyldige begivenheder, kendisstof uden samfundsrelevans, livsstil, viral-historier, eller nyheder med meget lav nyhedsværdi.
 
 SubCategory-regler:
 - "finans": Økonomi, aktier, valuta, virksomhedsnyheder, handelsnyheder, renter, boligmarked
 - "generelt": Alt der IKKE er økonomi/finans
 
-VIGTIGT: isGossip = true OG category = "sladder" for: kendisnyheder, underholdning, reality, sladder, kuriositeter, sport-gossip, popkultur, berømthedsnyheder`;
+VIGTIGT: isGossip = true OG category = "sladder" for alle nyheder der er lette/ligegyldige/uvæsentlige – det behøver IKKE være kendissladder, det er bare "bløde nyheder" uden seriøs nyhedsværdi.`;
 
     const userMessage = `${title}\n\n${content || ''}`.slice(0, 1000);
 
@@ -290,15 +290,15 @@ category (vælg ÉN):
 • "danmark" – handler om Danmark, dansk politik, danske virksomheder (Novo Nordisk, Mette Frederiksen, DR, danske byer osv.)
 • "europa" – europæiske lande UNDTAGEN Danmark, EU-politik
 • "verden" – USA, Asien, Mellemøsten, Afrika, globalt
-• "sladder" – kendis, underholdning, reality, royalt sladder, popkultur, berømtheder, filmstjerner, musikere, kuriositeter. BRUG DENNE for alt underholdnings-/celebrity-relateret!
+• "sladder" – lette/ligegyldige/uvæsentlige nyheder. Alt der IKKE passer i de seriøse kategorier: kuriositeter, underholdning, "soft news", ligegyldige begivenheder, viral-historier, kendisstof uden samfundsrelevans, livsstil, nyheder med meget lav nyhedsværdi.
 
 subCategory: "finans" for økonomi/aktier/business/valuta/renter, ellers "generelt"
 region: landet/området nyheden handler om (f.eks. "Danmark", "USA", "EU", "Kina")
-isGossip: true for underholdning/kendisnyheder/popkultur/kuriositeter (SÆT OGSÅ category til "sladder")
+isGossip: true for lette/ligegyldige/uvæsentlige nyheder (SÆT OGSÅ category til "sladder")
 confidence: 70-95 for tydelige, 50-69 for tvetydige
 
 VIGTIGT: Overskrifter på dansk handler OFTE om Danmark – check om de nævner danske emner!
-VIGTIGT: Nyheder om kendte personer, underholdning, popkultur SKAL kategoriseres som "sladder" med isGossip=true!`;
+VIGTIGT: "sladder" er IKKE kun kendissladder – det er alle nyheder der er lette, bløde eller ligegyldige sammenlignet med seriøse nyheder.`;
 
     const numberedItems = items
       .map((item, i) => `${i + 1}. ${item.title}`)
