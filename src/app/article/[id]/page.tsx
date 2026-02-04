@@ -48,8 +48,16 @@ function FactScoreBadge({ score }: { score: number }) {
 /* --- Helpers for formatting article body text --- */
 
 function formatArticleBody(raw: string): string {
+  // Strip leading markdown heading (duplicate title from AI generation)
+  let cleaned = raw;
+  const lines = cleaned.split('\n');
+  if (lines[0]?.startsWith('# ')) {
+    lines.shift();
+    cleaned = lines.join('\n').trimStart();
+  }
+
   // Split into paragraphs by double newline
-  const paragraphs = raw
+  const paragraphs = cleaned
     .split(/\n\n+/)
     .map((p) => p.trim())
     .filter(Boolean);
