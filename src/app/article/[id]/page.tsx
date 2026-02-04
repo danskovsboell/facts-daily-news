@@ -158,7 +158,7 @@ export default function ArticlePage() {
     return (
       <div className="mx-auto max-w-3xl px-4 py-12 text-center">
         <p className="text-lg text-red-400">⚠️ {error || 'Artikel ikke fundet'}</p>
-        <Link href="/" className="mt-4 inline-block text-blue-500 hover:text-blue-400">
+        <Link href="/" className="mt-4 inline-block text-accent-500 hover:text-accent-400">
           ← Tilbage til forsiden
         </Link>
       </div>
@@ -185,7 +185,7 @@ export default function ArticlePage() {
               {article.fact_details && article.fact_details.claims?.length > 0 && (
                 <button
                   onClick={() => setShowFactDetails(!showFactDetails)}
-                  className="text-xs text-blue-500 hover:text-blue-400 transition-colors"
+                  className="text-xs text-accent-500 hover:text-accent-400 transition-colors"
                 >
                   {showFactDetails ? 'Skjul detaljer' : 'Vis detaljer'}
                 </button>
@@ -222,7 +222,7 @@ export default function ArticlePage() {
             {article.interest_tags.map((tag) => (
               <span
                 key={tag}
-                className="rounded-full bg-blue-500/10 px-3 py-1 text-xs text-blue-400 border border-blue-500/20"
+                className="rounded-full bg-accent-500/10 px-3 py-1 text-xs text-accent-400 border border-accent-500/20"
               >
                 #{tag}
               </span>
@@ -251,7 +251,7 @@ export default function ArticlePage() {
           {article.title}
         </h1>
 
-        <p className="text-lg leading-relaxed text-zinc-400 border-l-2 border-blue-600 pl-4">
+        <p className="text-lg leading-relaxed text-zinc-400 border-l-2 border-accent-600 pl-4">
           {article.summary}
         </p>
       </header>
@@ -279,7 +279,7 @@ export default function ArticlePage() {
                     href={source.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="line-clamp-2 text-sm text-blue-500 hover:text-blue-400 transition-colors"
+                    className="line-clamp-2 text-sm text-accent-500 hover:text-accent-400 transition-colors"
                   >
                     {source.title}
                   </a>
@@ -304,7 +304,7 @@ export default function ArticlePage() {
                   href={`/article/${rel.id}`}
                   className="block rounded-lg border border-zinc-800 bg-zinc-900/30 p-4 transition-all hover:border-zinc-700 hover:bg-zinc-900"
                 >
-                  <h4 className="text-sm font-medium text-zinc-300 hover:text-blue-400 transition-colors">
+                  <h4 className="text-sm font-medium text-zinc-300 hover:text-accent-400 transition-colors">
                     {rel.title}
                   </h4>
                   <p className="mt-1 line-clamp-1 text-xs text-zinc-600">{rel.summary}</p>

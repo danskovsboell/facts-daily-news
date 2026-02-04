@@ -22,7 +22,7 @@ export default function InterestFilter({
             onClick={() => onTagChange(isActive ? null : tag)}
             className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
               isActive
-                ? 'border border-blue-500/60 bg-blue-600/25 text-blue-300 shadow-sm shadow-blue-500/10'
+                ? 'border border-accent-500/60 bg-accent-600/25 text-accent-300 shadow-sm shadow-accent-500/10'
                 : 'border border-zinc-700/50 bg-zinc-800/40 text-zinc-500 hover:border-zinc-600 hover:bg-zinc-800/70 hover:text-zinc-400'
             }`}
           >

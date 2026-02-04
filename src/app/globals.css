@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+@theme {
+  --color-accent-300: #93b5d6;
+  --color-accent-400: #7da3c9;
+  --color-accent-500: #6895c4;
+  --color-accent-600: #5b8ec9;
+  --color-accent-700: #4a7dbd;
+  --color-accent-800: #3d6a9e;
+  --color-accent-900: #2d4f78;
+}
+
 :root {
   --background: #09090b;
   --foreground: #c5c5c5;
@@ -97,13 +107,13 @@ body {
 }
 
 .article-pullquote {
-  border-left: 3px solid #2563eb; /* blue-600 */
+  border-left: 3px solid #5b8ec9; /* accent-600 */
   padding: 1rem 1.25rem;
   margin: 2rem 0;
   font-size: 1.15rem;
   font-style: italic;
   color: #a1a1aa; /* zinc-400 */
-  background: rgba(37, 99, 235, 0.05);
+  background: rgba(91, 142, 201, 0.05);
   border-radius: 0 0.5rem 0.5rem 0;
 }
 
@@ -120,11 +130,11 @@ body {
 }
 
 .article-body a {
-  color: #60a5fa; /* blue-400 */
+  color: #7da3c9; /* accent-400 */
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .article-body a:hover {
-  color: #93bbfd;
+  color: #93b5d6;
 }

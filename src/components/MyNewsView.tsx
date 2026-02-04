@@ -173,7 +173,7 @@ export default function MyNewsView() {
                 Tjek dine interesser under{' '}
                 <Link
                   href="/settings"
-                  className="text-blue-500 hover:text-blue-400"
+                  className="text-accent-500 hover:text-accent-400"
                 >
                   ⚙️ Indstillinger
                 </Link>

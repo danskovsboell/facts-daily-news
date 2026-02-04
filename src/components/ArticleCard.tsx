@@ -76,7 +76,7 @@ export default function ArticleCard({ article }: ArticleCardProps) {
 
         {/* Title */}
         <Link href={`/article/${article.id}`} className="block">
-          <h3 className="text-base font-semibold leading-snug text-zinc-200 transition-colors group-hover:text-blue-400">
+          <h3 className="text-base font-semibold leading-snug text-zinc-200 transition-colors group-hover:text-accent-400">
             {article.title}
           </h3>
         </Link>
@@ -94,7 +94,7 @@ export default function ArticleCard({ article }: ArticleCardProps) {
             {article.interest_tags.slice(0, 5).map((tag) => (
               <span
                 key={tag}
-                className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-400"
+                className="rounded-full bg-accent-500/10 px-2 py-0.5 text-[10px] text-accent-400"
               >
                 #{tag}
               </span>
@@ -109,7 +109,7 @@ export default function ArticleCard({ article }: ArticleCardProps) {
           </span>
           <Link
             href={`/article/${article.id}`}
-            className="text-xs text-blue-500 transition-colors hover:text-blue-400"
+            className="text-xs text-accent-500 transition-colors hover:text-accent-400"
           >
             Læs artikel →
           </Link>

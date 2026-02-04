@@ -8,7 +8,7 @@ export default function Header() {
     <header className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur-sm">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
         <Link href="/" className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-lg font-bold">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-600 text-lg font-bold">
             F
           </div>
           <div>

@@ -61,7 +61,7 @@ export default function NewsCard({ item }: NewsCardProps) {
           rel="noopener noreferrer"
           className="block"
         >
-          <h3 className="text-base font-semibold leading-snug text-zinc-100 transition-colors group-hover:text-blue-400">
+          <h3 className="text-base font-semibold leading-snug text-zinc-100 transition-colors group-hover:text-accent-400">
             {item.title}
           </h3>
         </a>
@@ -79,7 +79,7 @@ export default function NewsCard({ item }: NewsCardProps) {
             href={item.link}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-blue-500 transition-colors hover:text-blue-400"
+            className="text-xs text-accent-500 transition-colors hover:text-accent-400"
           >
             Læs mere →
           </a>

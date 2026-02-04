@@ -81,7 +81,7 @@ export default function Home() {
                   Opdateret: {lastUpdated.toLocaleTimeString('da-DK')}
                 </span>
               )}
-              <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-400">
+              <span className="rounded-full bg-accent-500/10 px-2 py-0.5 text-[10px] text-accent-400">
                 ✨ AI-artikler
               </span>
             </div>

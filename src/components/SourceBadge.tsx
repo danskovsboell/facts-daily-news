@@ -11,7 +11,7 @@ const SOURCE_COLORS: Record<string, string> = {
   'Politiken': 'bg-teal-900/30 text-teal-400 border-teal-800/30',
   'Jyllands-Posten': 'bg-cyan-900/30 text-cyan-400 border-cyan-800/30',
   'Børsen': 'bg-emerald-900/30 text-emerald-400 border-emerald-800/30',
-  'Reuters Business': 'bg-blue-900/30 text-blue-400 border-blue-800/30',
+  'Reuters Business': 'bg-accent-900/30 text-accent-400 border-accent-800/30',
   'BBC News': 'bg-rose-900/30 text-rose-400 border-rose-800/30',
   'BBC World': 'bg-rose-900/30 text-rose-400 border-rose-800/30',
   'Deutsche Welle': 'bg-violet-900/30 text-violet-400 border-violet-800/30',

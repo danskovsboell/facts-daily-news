@@ -92,13 +92,13 @@ export default function FactScore({ score: initialScore, details: initialDetails
           disabled={loading}
           className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-all cursor-pointer hover:brightness-110 ${
             loading
-              ? 'border-blue-500/30 bg-blue-500/10 text-blue-400'
-              : `${FACT_SCORE_COLORS.unknown.bg} ${FACT_SCORE_COLORS.unknown.text} ${FACT_SCORE_COLORS.unknown.border} hover:border-blue-500/50 hover:text-blue-400`
+              ? 'border-accent-500/30 bg-accent-500/10 text-accent-400'
+              : `${FACT_SCORE_COLORS.unknown.bg} ${FACT_SCORE_COLORS.unknown.text} ${FACT_SCORE_COLORS.unknown.border} hover:border-accent-500/50 hover:text-accent-400`
           }`}
         >
           {loading ? (
             <>
-              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-accent-400 border-t-transparent" />
               Tjekker...
             </>
           ) : (
@@ -109,7 +109,7 @@ export default function FactScore({ score: initialScore, details: initialDetails
         {showDetails && loading && (
           <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-zinc-700 bg-zinc-900 p-4 shadow-2xl">
             <div className="flex items-center gap-2 py-2">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
               <span className="text-xs text-zinc-400">Grok AI analyserer artiklen...</span>
             </div>
           </div>
@@ -162,7 +162,7 @@ function DetailsPopup({ details, onClose }: { details: FactCheckResult; onClose:
 
       {details.category && (
         <div className="mb-3">
-          <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] font-medium text-blue-400">
+          <span className="rounded-full bg-accent-500/20 px-2 py-0.5 text-[10px] font-medium text-accent-400">
             {details.category}
           </span>
         </div>

@@ -105,7 +105,7 @@ export default function SettingsPage() {
         <div className="mt-6 flex items-center gap-3">
           <button
             onClick={handleSave}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+            className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-500"
           >
             {saved ? '✓ Gemt!' : 'Gem ændringer'}
           </button>
