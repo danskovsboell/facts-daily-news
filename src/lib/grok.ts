@@ -282,30 +282,22 @@ export async function batchCategorize(
   }
 
   try {
-    const systemPrompt = `Du er en nyhedskategoriserings-ekspert. Kategorisér ALLE disse nyheder.
+    const systemPrompt = `Kategorisér disse nyhedsoverskrifter. Returnér JSON med et "results" array – ét element per overskrift, i SAMME rækkefølge.
 
-Returnér et JSON-objekt med et "results" array. For HVER nyhed (i rækkefølge), returnér:
-{
-  "results": [
-    {
-      "category": "<danmark|europa|verden|sladder>",
-      "subCategory": "<generelt|finans>",
-      "region": "<specifik region/land>",
-      "isGossip": <true|false>,
-      "confidence": <number 0-100>
-    },
-    ...
-  ]
-}
+Format: {"results":[{"category":"...", "subCategory":"...", "region":"...", "isGossip":false, "confidence":85}, ...]}
 
-Kategori-regler:
-- "danmark": Nyheder om Danmark, danske personer, dansk politik
-- "europa": Nyheder om europæiske lande (undtagen Danmark), EU
-- "verden": Nyheder om resten af verden, globale emner
-- "sladder": Kendisnyheder, gossip, underholdning, reality TV, royalt sladder, kuriositeter
+category (vælg ÉN):
+• "danmark" – handler om Danmark, danske personer/virksomheder (Novo Nordisk, Mette Frederiksen, DR, danske byer osv.)
+• "europa" – europæiske lande UNDTAGEN Danmark, EU-politik
+• "verden" – USA, Asien, Mellemøsten, Afrika, globalt
+• "sladder" – kendis, underholdning, reality, royalt sladder
 
-SubCategory: "finans" for økonomi/aktier/business, ellers "generelt"
-isGossip: true for kendisnyheder, underholdning, reality, sladder`;
+subCategory: "finans" for økonomi/aktier/business/valuta/renter, ellers "generelt"
+region: landet/området nyheden handler om (f.eks. "Danmark", "USA", "EU", "Kina")
+isGossip: true KUN for underholdning/kendisnyheder
+confidence: 70-95 for tydelige, 50-69 for tvetydige
+
+VIGTIGT: Overskrifter på dansk handler OFTE om Danmark – check om de nævner danske emner!`;
 
     const numberedItems = items
       .map((item, i) => `${i + 1}. ${item.title}`)
