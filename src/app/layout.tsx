@@ -4,7 +4,7 @@ import './globals.css';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
   title: 'Facts on Daily News – AI Fakta-Check Dashboard',
@@ -19,7 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="da" className="dark">
-      <body className={`${inter.className} min-h-screen bg-zinc-950 text-[#c5c5c5] antialiased`}>
+      <body className={`${inter.variable} min-h-screen bg-zinc-950 text-[#c5c5c5] antialiased`}>
         <div className="flex min-h-screen flex-col">
           <Header />
           <main className="flex-1">{children}</main>

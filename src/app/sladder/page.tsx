@@ -12,7 +12,7 @@ export default function SladderPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">🗣️ Sludder & Sladder</h1>
+        <h1 className="text-2xl font-bold text-[#c5c5c5]">🗣️ Sludder & Sladder</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Kultur, underholdning og det lidt lettere stof
         </p>

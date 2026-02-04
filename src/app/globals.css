@@ -18,6 +18,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
+  font-family: var(--font-inter, Inter), "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
 }
 
 /* Scrollbar styling */
@@ -77,14 +78,14 @@ body {
 
 .article-paragraph strong,
 .article-lead strong {
-  color: #e4e4e7; /* zinc-200 */
+  color: #c5c5c5;
   font-weight: 600;
 }
 
 .article-h2 {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #e4e4e7;
+  color: #c5c5c5;
   margin-top: 2.5rem;
   margin-bottom: 1rem;
   padding-top: 1rem;

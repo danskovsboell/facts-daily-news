@@ -154,8 +154,8 @@ function DetailsPopup({ details, onClose }: { details: FactCheckResult; onClose:
   return (
     <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-zinc-700 bg-zinc-900 p-4 shadow-2xl">
       <div className="mb-3 flex items-center justify-between">
-        <h4 className="text-sm font-bold text-zinc-200">🔍 Fakta-check detaljer</h4>
-        <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200">✕</button>
+        <h4 className="text-sm font-bold text-[#c5c5c5]">🔍 Fakta-check detaljer</h4>
+        <button onClick={onClose} className="text-zinc-500 hover:text-[#c5c5c5]">✕</button>
       </div>
 
       <p className="mb-3 text-xs leading-relaxed text-zinc-400">{details.summary}</p>

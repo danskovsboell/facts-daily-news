@@ -193,7 +193,7 @@ export default function MyNewsView() {
               <div key={section.category}>
                 <div className="mb-3 flex items-center gap-2 border-b border-zinc-800 pb-2">
                   <span className="text-lg">{section.emoji}</span>
-                  <h2 className="text-lg font-semibold text-zinc-200">
+                  <h2 className="text-lg font-semibold text-[#c5c5c5]">
                     {section.label}
                   </h2>
                   <span className="text-sm font-normal text-zinc-600">

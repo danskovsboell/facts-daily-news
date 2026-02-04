@@ -27,7 +27,7 @@ export default function TabNavigation({
             className={`whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
               activeTab === tab.id
                 ? 'bg-accent-600 text-white shadow-lg shadow-accent-600/20'
-                : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                : 'text-zinc-400 hover:bg-zinc-800 hover:text-[#c5c5c5]'
             }`}
           >
             {tab.label}
@@ -44,7 +44,7 @@ export default function TabNavigation({
               onClick={() => onSubTabChange(subTab.id)}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
                 activeSubTab === subTab.id
-                  ? 'bg-zinc-700 text-zinc-200'
+                  ? 'bg-zinc-700 text-[#c5c5c5]'
                   : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >

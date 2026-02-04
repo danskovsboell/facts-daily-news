@@ -79,14 +79,14 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
-      <h1 className="text-2xl font-bold text-zinc-200">⚙️ Indstillinger</h1>
+      <h1 className="text-2xl font-bold text-[#c5c5c5]">⚙️ Indstillinger</h1>
       <p className="mt-2 text-sm text-zinc-500">
         Tilpas dit nyhedsfeed efter dine interesser
       </p>
 
       {/* Interests section */}
       <section className="mt-8">
-        <h2 className="text-lg font-semibold text-zinc-200">
+        <h2 className="text-lg font-semibold text-[#c5c5c5]">
           Interesseområder
         </h2>
         <p className="mt-1 text-sm text-zinc-500">
@@ -120,7 +120,7 @@ export default function SettingsPage() {
 
       {/* About section */}
       <section className="mt-12 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
-        <h2 className="text-lg font-semibold text-zinc-200">Om appen</h2>
+        <h2 className="text-lg font-semibold text-[#c5c5c5]">Om appen</h2>
         <div className="mt-3 space-y-2 text-sm text-zinc-500">
           <p>
             <strong className="text-zinc-400">Facts on Daily News</strong> er et
@@ -141,7 +141,7 @@ export default function SettingsPage() {
 
       {/* API Status */}
       <section className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
-        <h2 className="text-lg font-semibold text-zinc-200">API Status</h2>
+        <h2 className="text-lg font-semibold text-[#c5c5c5]">API Status</h2>
         <div className="mt-3 space-y-2">
           <StatusRow label="Grok Web Search (Nyhedsopdagelse)" status={apiStatuses.grok_search} />
           <StatusRow label="Grok (Artikelskrivning)" status={apiStatuses.grok} />

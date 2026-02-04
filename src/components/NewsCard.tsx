@@ -61,7 +61,7 @@ export default function NewsCard({ item }: NewsCardProps) {
           rel="noopener noreferrer"
           className="block"
         >
-          <h3 className="text-base font-semibold leading-snug text-zinc-100 transition-colors group-hover:text-accent-400">
+          <h3 className="text-base font-semibold leading-snug text-[#c5c5c5] transition-colors group-hover:text-accent-400">
             {item.title}
           </h3>
         </a>
