@@ -12,7 +12,7 @@ export default function Footer() {
             <span className="text-sm text-zinc-500">{APP_NAME}</span>
           </div>
           <p className="text-xs text-zinc-600">
-            Fakta-check drevet af Grok (xAI) · Nyheder fra RSS feeds ·{' '}
+            Fakta-check drevet af Grok (xAI) · AI-genererede artikler ·{' '}
             {new Date().getFullYear()}
           </p>
         </div>
