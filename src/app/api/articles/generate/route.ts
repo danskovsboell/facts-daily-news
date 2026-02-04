@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { RawSource } from '@/lib/types';
+import { DEFAULT_INTERESTS } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // Vercel Pro plan
@@ -75,6 +76,44 @@ function isDuplicate(newTitle: string, existingTitles: string[]): { isDup: boole
   return { isDup: false };
 }
 
+// ─── Interest matching ───────────────────────────────────────
+
+/** Keywords map for each interest area */
+const INTEREST_KEYWORDS: Record<string, string[]> = {
+  'Tesla': ['tesla', 'elon musk', 'spacex', 'musk', 'cybertruck', 'model 3', 'model y', 'model s', 'model x', 'supercharger', 'gigafactory', 'elektr'],
+  'AI': ['ai', 'kunstig intelligens', 'artificial intelligence', 'machine learning', 'chatgpt', 'openai', 'grok', 'claude', 'deepmind', 'neural', 'llm', 'generat'],
+  'Grøn Energi': ['grøn energi', 'green energy', 'vedvarende', 'renewable', 'solenergi', 'solar', 'vindenergi', 'wind power', 'vindmølle', 'bæredygtig', 'sustainable', 'klima', 'climate', 'co2', 'emission', 'elbil', 'electric vehicle', 'hydrogen', 'batteri'],
+  'Økonomi & Finans': ['økonomi', 'economy', 'finans', 'finance', 'aktie', 'stock', 'marked', 'market', 'investering', 'investment', 'inflation', 'bnp', 'gdp', 'vækst', 'growth', 'handel', 'trade', 'valuta', 'currency', 'bank', 'børs'],
+  'Renter': ['rente', 'interest rate', 'centralbank', 'central bank', 'ecb', 'nationalbanken', 'fed', 'federal reserve', 'pengepolitik', 'monetary', 'obligat', 'bond', 'realkredit', 'boliglån', 'mortgage'],
+};
+
+/** Score how well a source matches user interests (0 = no match, higher = better match) */
+function interestScore(source: RawSource, interests: string[]): number {
+  const searchText = `${source.title} ${source.description || ''}`.toLowerCase();
+  let score = 0;
+
+  for (const interest of interests) {
+    const keywords = INTEREST_KEYWORDS[interest] || [interest.toLowerCase()];
+    for (const keyword of keywords) {
+      if (searchText.includes(keyword)) {
+        score += 1;
+        break; // Count each interest only once
+      }
+    }
+  }
+
+  return score;
+}
+
+/** Sort sources so interest-matching ones come first */
+function prioritizeByInterests(sources: RawSource[], interests: string[]): RawSource[] {
+  return [...sources].sort((a, b) => {
+    const scoreA = interestScore(a, interests);
+    const scoreB = interestScore(b, interests);
+    return scoreB - scoreA; // Higher score first
+  });
+}
+
 // ─── Source grouping ─────────────────────────────────────────
 
 function groupSources(sources: RawSource[]): RawSource[][] {
@@ -131,7 +170,12 @@ async function generateArticle(sources: RawSource[]): Promise<{
     `Kilde ${i + 1}: ${s.source_name}\nOverskrift: ${s.title}\nBeskrivelse: ${s.description || '(ingen)'}\nIndhold: ${(s.raw_content || '').slice(0, 1500)}\nURL: ${s.url}`
   ).join('\n\n');
 
+  const interestsList = DEFAULT_INTERESTS.join(', ');
+
   const systemPrompt = `Du er en professionel nyhedsjournalist. Skriv en original dansk artikel baseret på følgende kilder.
+
+LÆSERENS INTERESSEOMRÅDER: ${interestsList}
+Fokuser på aspekter der er relevante for disse interesser. Hvis kildematerialet handler om et af disse emner, fremhæv det tydeligt. Tilføj relevante interest_tags baseret på indholdet.
 
 REGLER:
 - Skriv på dansk
@@ -142,6 +186,7 @@ REGLER:
 - Artiklen skal have: overskrift, kort opsummering (1-2 sætninger), og brødtekst i markdown
 - Fakta-tjek alle påstande mod kilderne og giv en samlet score 0-100
 - Body skal være mindst 200 ord
+- interest_tags skal matche relevante emner fra listen: ${interestsList}
 
 SVAR I JSON FORMAT:
 {
@@ -294,7 +339,11 @@ export async function GET() {
       return !urlUsed;
     });
 
-    if (freshSources.length === 0) {
+    // ── Step 3b: Prioritize sources by user interests ────────
+    const prioritizedSources = prioritizeByInterests(freshSources, DEFAULT_INTERESTS);
+    const interestMatchCount = prioritizedSources.filter(s => interestScore(s, DEFAULT_INTERESTS) > 0).length;
+
+    if (prioritizedSources.length === 0) {
       // Mark remaining as processed anyway
       const ids = (rawSources as RawSource[]).map(s => s.id);
       await supabase.from('raw_sources').update({ processed: true }).in('id', ids);
@@ -305,8 +354,8 @@ export async function GET() {
       });
     }
 
-    // ── Step 4: Group related sources ────────────────────────
-    const groups = groupSources(freshSources);
+    // ── Step 4: Group related sources (using prioritized order) ─
+    const groups = groupSources(prioritizedSources);
     const articlesGenerated: string[] = [];
     const skippedDuplicates: string[] = [];
     const errors: string[] = [];
@@ -404,6 +453,8 @@ export async function GET() {
       errors: errors.length > 0 ? errors : undefined,
       raw_sources_count: rawSources.length,
       fresh_sources_count: freshSources.length,
+      interest_match_count: interestMatchCount,
+      interests_used: DEFAULT_INTERESTS,
     });
   } catch (error) {
     console.error('Article generation error:', error);

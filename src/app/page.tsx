@@ -2,55 +2,30 @@
 
 import { useState } from 'react';
 import TabNavigation from '@/components/TabNavigation';
-import NewsCard from '@/components/NewsCard';
 import ArticleCard from '@/components/ArticleCard';
 import { useArticles } from '@/hooks/useArticles';
-import { useNews } from '@/hooks/useNews';
 import { Category, SubCategory } from '@/lib/types';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Category>('danmark');
   const [activeSubTab, setActiveSubTab] = useState<SubCategory>('generelt');
 
-  // Try articles first (V2 - Supabase)
+  // Only use Supabase articles — no RSS fallback
   const {
     articles,
-    loading: articlesLoading,
-    error: articlesError,
+    loading,
+    error,
     refresh: refreshArticles,
     loadMore,
     hasMore,
-    lastUpdated: articlesLastUpdated,
-    count: articlesCount,
+    lastUpdated,
+    count,
   } = useArticles({
     category: activeTab,
     subCategory: activeTab !== 'sladder' ? activeSubTab : undefined,
     autoRefresh: true,
+    refreshInterval: 300000, // Poll every 5 minutes for new articles
   });
-
-  // Fallback to old news feed (V1 - RSS/NewsAPI)
-  const useFallback = articlesError === 'supabase_not_configured' ||
-    (articlesError !== null && articles.length === 0);
-
-  const {
-    news,
-    loading: newsLoading,
-    error: newsError,
-    refresh: refreshNews,
-    lastUpdated: newsLastUpdated,
-  } = useNews({
-    category: activeTab,
-    subCategory: activeTab !== 'sladder' ? activeSubTab : undefined,
-    autoRefresh: useFallback,
-  });
-
-  // Determine what to show
-  const showArticles = !useFallback && (articles.length > 0 || articlesLoading);
-  const loading = showArticles ? articlesLoading : newsLoading;
-  const error = showArticles ? (articlesError !== 'supabase_not_configured' ? articlesError : null) : newsError;
-  const lastUpdated = showArticles ? articlesLastUpdated : newsLastUpdated;
-  const itemCount = showArticles ? articlesCount : news.length;
-  const refresh = showArticles ? refreshArticles : refreshNews;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
@@ -69,21 +44,19 @@ export default function Home() {
       <div className="mt-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-xs text-zinc-600">
-            {loading ? 'Henter nyheder...' : `${itemCount} ${showArticles ? 'artikler' : 'nyheder'}`}
+            {loading ? 'Henter artikler...' : `${count} artikler`}
           </span>
           {lastUpdated && (
             <span className="text-[10px] text-zinc-700">
               Opdateret: {lastUpdated.toLocaleTimeString('da-DK')}
             </span>
           )}
-          {showArticles && (
-            <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-400">
-              ✨ AI-artikler
-            </span>
-          )}
+          <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-400">
+            ✨ AI-artikler
+          </span>
         </div>
         <button
-          onClick={refresh}
+          onClick={refreshArticles}
           disabled={loading}
           className="rounded-lg px-3 py-1.5 text-xs text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300 disabled:opacity-50"
         >
@@ -92,11 +65,11 @@ export default function Home() {
       </div>
 
       {/* Error state */}
-      {error && (
+      {error && error !== 'supabase_not_configured' && (
         <div className="mt-4 rounded-xl border border-red-800/30 bg-red-900/10 p-4">
           <p className="text-sm text-red-400">⚠️ {error}</p>
           <button
-            onClick={refresh}
+            onClick={refreshArticles}
             className="mt-2 text-xs text-red-500 underline hover:text-red-400"
           >
             Prøv igen
@@ -105,7 +78,7 @@ export default function Home() {
       )}
 
       {/* Loading state */}
-      {loading && (showArticles ? articles.length === 0 : news.length === 0) && (
+      {loading && articles.length === 0 && (
         <div className="mt-8 space-y-4">
           {[...Array(5)].map((_, i) => (
             <div
@@ -124,18 +97,18 @@ export default function Home() {
         </div>
       )}
 
-      {/* Empty state */}
-      {!loading && (showArticles ? articles.length === 0 : news.length === 0) && !error && (
+      {/* Empty state — no fallback to RSS */}
+      {!loading && articles.length === 0 && !error && (
         <div className="mt-12 text-center">
-          <p className="text-lg text-zinc-500">📰 Ingen {showArticles ? 'artikler' : 'nyheder'} fundet</p>
+          <p className="text-lg text-zinc-500">📰 Ingen artikler endnu</p>
           <p className="mt-2 text-sm text-zinc-600">
-            Prøv en anden kategori eller opdater
+            Nye artikler genereres automatisk. Tjek igen om lidt.
           </p>
         </div>
       )}
 
-      {/* Articles feed (V2) */}
-      {showArticles && (
+      {/* Articles feed — Supabase only */}
+      {articles.length > 0 && (
         <div className="mt-4 space-y-3">
           {articles.map((article) => (
             <ArticleCard key={article.id} article={article} />
@@ -148,15 +121,6 @@ export default function Home() {
               Indlæs flere artikler
             </button>
           )}
-        </div>
-      )}
-
-      {/* News feed fallback (V1) */}
-      {!showArticles && (
-        <div className="mt-4 space-y-3">
-          {news.map((item) => (
-            <NewsCard key={item.id} item={item} />
-          ))}
         </div>
       )}
     </div>
