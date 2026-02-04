@@ -48,7 +48,7 @@ export default function MyNewsView() {
     }
 
     const byDate = (a: Article, b: Article) =>
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      new Date(b.news_date || b.created_at).getTime() - new Date(a.news_date || a.created_at).getTime();
 
     return SECTIONS.map((section) => ({
       ...section,

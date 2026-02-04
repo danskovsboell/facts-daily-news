@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { RawSource } from '@/lib/types';
 import { DEFAULT_INTERESTS } from '@/lib/constants';
+import { factCheck } from '@/lib/grok';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // Vercel Pro plan
@@ -96,8 +97,7 @@ async function getAllInterestNames(): Promise<string[]> {
 
     const { data, error } = await supabase
       .from('interests')
-      .select('name')
-      .gt('active_users', 0);
+      .select('name');
 
     if (error || !data || data.length === 0) {
       return DEFAULT_INTERESTS;
@@ -200,6 +200,7 @@ async function generateArticle(sources: RawSource[], interestNames?: string[]): 
   sub_category: string;
   interest_tags: string[];
   is_gossip: boolean;
+  news_date: string | null;
 } | null> {
   if (!GROK_API_KEY) return null;
 
@@ -248,6 +249,9 @@ UNDERKATEGORI-REGLER (sub_category):
 
 VIGTIGT OM SLADDER: Hvis kildematerialet handler om kendte personer, underholdning, popkultur, reality TV, royale familier, eller lignende let stof, SKAL category være "sladder" og is_gossip SKAL være true. Eksempler: Harry Potter-skuespillere, kendisskandaler, reality-deltagere, royalt sladder.
 
+DATO-ESTIMATION:
+Baseret på kildernes published_at datoer og indholdet, estimér den mest præcise dato og tid for HVORNÅR denne nyhed fandt sted eller blev offentliggjort. Returner som news_date i ISO 8601 format (f.eks. "2026-02-04T14:30:00Z"). Hvis du ikke kan estimere tiden præcist, brug middag (12:00) den relevante dag.
+
 SVAR I JSON FORMAT:
 {
   "title": "...",
@@ -258,7 +262,8 @@ SVAR I JSON FORMAT:
   "category": "danmark|europa|verden|sladder",
   "sub_category": "generelt|finans",
   "interest_tags": ["ai", "tesla"],
-  "is_gossip": false
+  "is_gossip": false,
+  "news_date": "2026-02-04T14:30:00Z"
 }`;
 
   const controller = new AbortController();
@@ -303,6 +308,31 @@ SVAR I JSON FORMAT:
       return null;
     }
 
+    // Parse news_date from Grok response or estimate from sources
+    let newsDate: string | null = null;
+    if (parsed.news_date) {
+      try {
+        const d = new Date(parsed.news_date);
+        if (!isNaN(d.getTime())) {
+          newsDate = d.toISOString();
+        }
+      } catch {
+        // ignore
+      }
+    }
+    // Fallback: use the earliest source published_at
+    if (!newsDate) {
+      const sourceDates = sources
+        .map(s => s.published_at)
+        .filter(Boolean)
+        .map(d => new Date(d))
+        .filter(d => !isNaN(d.getTime()))
+        .sort((a, b) => a.getTime() - b.getTime());
+      if (sourceDates.length > 0) {
+        newsDate = sourceDates[0].toISOString();
+      }
+    }
+
     return {
       title: parsed.title || sources[0].title,
       summary: parsed.summary || '',
@@ -317,6 +347,7 @@ SVAR I JSON FORMAT:
         : sources[0].sub_category || 'generelt',
       interest_tags: Array.isArray(parsed.interest_tags) ? parsed.interest_tags : [],
       is_gossip: Boolean(parsed.is_gossip),
+      news_date: newsDate,
     };
   } catch (error) {
     clearTimeout(timeout);
@@ -497,10 +528,8 @@ export async function GET() {
           continue;
         }
 
-        // Insert article
-        const { error: insertError } = await supabase
-          .from('articles')
-          .insert({
+        // Build insert payload — include news_date if the column exists
+        const insertPayload: Record<string, unknown> = {
             title: article.title,
             summary: article.summary,
             body: article.body,
@@ -516,16 +545,79 @@ export async function GET() {
             })),
             is_gossip: article.is_gossip,
             published: true,
-          });
+        };
 
-        if (insertError) {
-          errors.push(`Group ${i}: insert error - ${insertError.message}`);
+        // Try inserting with news_date first; if column doesn't exist, retry without
+        if (article.news_date) {
+          insertPayload.news_date = article.news_date;
+        }
+
+        let insertResult = await supabase
+          .from('articles')
+          .insert(insertPayload)
+          .select('id');
+
+        // If news_date column doesn't exist yet, retry without it
+        if (insertResult.error && insertResult.error.message?.includes('news_date')) {
+          console.warn('⚠️ news_date column not found, inserting without it');
+          delete insertPayload.news_date;
+          insertResult = await supabase
+            .from('articles')
+            .insert(insertPayload)
+            .select('id');
+        }
+
+        if (insertResult.error) {
+          errors.push(`Group ${i}: insert error - ${insertResult.error.message}`);
           continue;
         }
+
+        const insertedId = insertResult.data?.[0]?.id;
 
         articlesGenerated.push(article.title);
         existingTitles.push(article.title); // Add to dedup list for this run
         articlesCreated++;
+
+        // ── Fix 1: Automatic fact-check with web search ──
+        // Run AFTER insert so article exists even if fact-check fails
+        if (insertedId) {
+          try {
+            console.log(`🔍 Running web search fact-check for: "${article.title.slice(0, 50)}..."`);
+            const fcResult = await factCheck(
+              article.title,
+              article.body,
+              group[0]?.source_name || 'AI-genereret'
+            );
+
+            if (fcResult && fcResult.score >= 0) {
+              const updatePayload: Record<string, unknown> = {
+                fact_score: fcResult.score,
+                fact_details: {
+                  claims: fcResult.claims || [],
+                  sources_checked: fcResult.sources || [],
+                  source_links: fcResult.sourceLinks || [],
+                  summary: fcResult.summary,
+                  verification_method: fcResult.verificationMethod,
+                  checked_at: fcResult.checkedAt,
+                },
+              };
+
+              await supabase
+                .from('articles')
+                .update(updatePayload)
+                .eq('id', insertedId);
+
+              console.log(`✅ Fact-check updated: score=${fcResult.score} for "${article.title.slice(0, 50)}..."`);
+            }
+          } catch (fcError) {
+            // Fact-check failed — set fact_score to null so we know it wasn't checked
+            console.error(`⚠️ Fact-check failed for "${article.title.slice(0, 50)}...":`, fcError);
+            await supabase
+              .from('articles')
+              .update({ fact_score: null })
+              .eq('id', insertedId);
+          }
+        }
 
         // Mark sources as processed
         const sourceIds = group.map(s => s.id);

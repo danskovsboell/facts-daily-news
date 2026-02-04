@@ -33,9 +33,15 @@ function hasMatchingInterest(article: Article, interests: string[]): boolean {
   });
 }
 
+/** Get the best date for sorting: news_date (when it happened) or created_at (when we generated it) */
+function articleDate(a: Article): number {
+  const dateStr = a.news_date || a.created_at;
+  return new Date(dateStr).getTime();
+}
+
 /**
  * Sort articles: interest-tagged articles ALWAYS first, then the rest.
- * Within each group, sorted by created_at (newest first).
+ * Within each group, sorted by news_date (newest first), falling back to created_at.
  */
 function prioritizeArticles(articles: Article[], interests: string[]): Article[] {
   if (!interests.length) return articles;
@@ -51,9 +57,8 @@ function prioritizeArticles(articles: Article[], interests: string[]): Article[]
     }
   }
 
-  // Sort each group by date (newest first)
-  const byDate = (a: Article, b: Article) =>
-    new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  // Sort each group by news_date (newest first), fallback to created_at
+  const byDate = (a: Article, b: Article) => articleDate(b) - articleDate(a);
 
   matched.sort(byDate);
   rest.sort(byDate);

@@ -326,7 +326,7 @@ export default function ArticlePage() {
               💰 Finans
             </span>
           )}
-          <span className="text-xs text-zinc-600">{timeAgo(article.created_at)}</span>
+          <span className="text-xs text-zinc-600">{timeAgo(article.news_date || article.created_at)}</span>
         </div>
 
         <h1 className="mb-4 text-2xl font-bold leading-tight text-[#c5c5c5] md:text-3xl lg:text-4xl">

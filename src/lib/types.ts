@@ -100,6 +100,7 @@ export interface Article {
   interest_tags: string[];
   sources: ArticleSource[];
   is_gossip: boolean;
+  news_date?: string;
   created_at: string;
   updated_at: string;
   published: boolean;

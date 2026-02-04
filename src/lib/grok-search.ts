@@ -25,6 +25,7 @@ export interface GrokNewsStory {
   url: string;
   summary: string;
   category: string;
+  published_date?: string;
 }
 
 export interface GrokSearchResult {
@@ -57,9 +58,9 @@ const CORE_GEO_SEARCHES: SearchQuery[] = [
     prompt: `Search the web for the most important Danish news stories from today. Find REAL current news from Danish media (DR, TV2, Berlingske, Politiken, Jyllands-Posten, BT, Ekstra Bladet, Information, etc).
 
 Return ONLY valid JSON (no markdown, no extra text, no grok:render tags):
-{"stories": [{"title": "...", "source": "...", "url": "...", "summary": "one sentence summary in Danish", "category": "danmark"}]}
+{"stories": [{"title": "...", "source": "...", "url": "...", "summary": "one sentence summary in Danish", "category": "danmark", "published_date": "ISO 8601 datetime of when this news was published/happened"}]}
 
-Find 8-12 stories. Include the actual URL from the source. Each story must have a unique URL.`,
+Find 8-12 stories. Include the actual URL from the source. Each story must have a unique URL. published_date should be as precise as possible (include time if known).`,
   },
   {
     label: 'Danmark - Finans & Erhverv',
@@ -68,9 +69,9 @@ Find 8-12 stories. Include the actual URL from the source. Each story must have 
     prompt: `Search the web for today's Danish financial, business and economic news. Look at Børsen, Berlingske Business, Finans.dk, and international sources covering Danish companies (Novo Nordisk, Maersk, Vestas, Carlsberg, DSV, Ørsted, Pandora, etc). Also look for news about Danish economy, housing market, interest rates.
 
 Return ONLY valid JSON (no markdown, no extra text, no grok:render tags):
-{"stories": [{"title": "...", "source": "...", "url": "...", "summary": "one sentence in Danish", "category": "danmark"}]}
+{"stories": [{"title": "...", "source": "...", "url": "...", "summary": "one sentence in Danish", "category": "danmark", "published_date": "ISO 8601 datetime of when this news was published/happened"}]}
 
-Find 5-8 stories.`,
+Find 5-8 stories. published_date should be as precise as possible.`,
   },
   {
     label: 'Europa - Generelt',
@@ -79,9 +80,9 @@ Find 5-8 stories.`,
     prompt: `Search the web for the most important European news from today (exclude Denmark-specific news). Include EU politics, major events in European countries (Germany, France, UK, Sweden, Norway, Italy, Spain, Poland, Ukraine, etc).
 
 Return ONLY valid JSON (no markdown, no extra text, no grok:render tags):
-{"stories": [{"title": "...", "source": "...", "url": "...", "summary": "one sentence in Danish", "category": "europa"}]}
+{"stories": [{"title": "...", "source": "...", "url": "...", "summary": "one sentence in Danish", "category": "europa", "published_date": "ISO 8601 datetime of when this news was published/happened"}]}
 
-Find 6-10 stories.`,
+Find 6-10 stories. published_date should be as precise as possible.`,
   },
   {
     label: 'Verden - Generelt',
@@ -90,9 +91,9 @@ Find 6-10 stories.`,
     prompt: `Search the web for today's most important world news (global, non-European). Include USA, Asia, Middle East, Africa, Latin America. Cover geopolitics, conflicts, major events.
 
 Return ONLY valid JSON (no markdown, no extra text, no grok:render tags):
-{"stories": [{"title": "...", "source": "...", "url": "...", "summary": "one sentence in Danish", "category": "verden"}]}
+{"stories": [{"title": "...", "source": "...", "url": "...", "summary": "one sentence in Danish", "category": "verden", "published_date": "ISO 8601 datetime of when this news was published/happened"}]}
 
-Find 6-10 stories.`,
+Find 6-10 stories. published_date should be as precise as possible.`,
   },
 ];
 
@@ -351,11 +352,10 @@ async function getInterestSearchQueries(): Promise<SearchQuery[] | null> {
       return null;
     }
 
-    // Fetch all interests that have at least 1 active user
+    // Fetch ALL interests (predefined + custom) — søg nyheder for alle
     const { data, error } = await supabase
       .from('interests')
       .select('id, name, slug, search_prompt, category, is_predefined, active_users')
-      .gt('active_users', 0)
       .order('active_users', { ascending: false })
       .limit(MAX_INTEREST_SEARCHES);
 
@@ -406,9 +406,9 @@ function buildInterestPrompt(
   return `Search the web for today's latest news about ${name}. Use these search terms: ${searchTerms}. Find recent articles, developments, and updates from the last 24 hours.
 
 Return ONLY valid JSON (no markdown, no extra text, no grok:render tags):
-{"stories": [{"title": "...", "source": "...", "url": "...", "summary": "one sentence in Danish", "category": "${slug}"}]}
+{"stories": [{"title": "...", "source": "...", "url": "...", "summary": "one sentence in Danish", "category": "${slug}", "published_date": "ISO 8601 datetime of when this news was published/happened"}]}
 
-Find 3-6 stories. Include the actual URL from the source. Each story must have a unique URL.`;
+Find 3-6 stories. Include the actual URL from the source. Each story must have a unique URL. published_date should be as precise as possible.`;
 }
 
 // ============================================================

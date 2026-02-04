@@ -54,12 +54,25 @@ export async function GET() {
       const category = (cat && cat.confidence > 50) ? cat.category : story.category;
       const subCategory = (cat && cat.confidence > 50) ? cat.subCategory : 'generelt';
 
+      // Use the actual published_date from Grok if available, otherwise fallback to now
+      let publishedAt = new Date().toISOString();
+      if (story.published_date) {
+        try {
+          const parsed = new Date(story.published_date);
+          if (!isNaN(parsed.getTime())) {
+            publishedAt = parsed.toISOString();
+          }
+        } catch {
+          // Keep fallback
+        }
+      }
+
       return {
         title: story.title,
         description: story.summary || null,
         url: story.url,
         source_name: story.source || 'Grok Web Search',
-        published_at: new Date().toISOString(), // Grok discovers "today's" news
+        published_at: publishedAt,
         category,
         sub_category: subCategory,
         raw_content: story.summary || '',

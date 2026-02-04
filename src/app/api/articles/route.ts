@@ -30,11 +30,13 @@ export async function GET(request: NextRequest) {
     todayMidnight.setUTCHours(0, 0, 0, 0);
     const todayMidnightISO = todayMidnight.toISOString();
 
+    // Try ordering by news_date first; if column doesn't exist, fallback to created_at only
     let query = supabase
       .from('articles')
       .select('*', { count: 'exact' })
       .eq('published', true)
       .gte('created_at', todayMidnightISO)
+      .order('news_date', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -48,7 +50,34 @@ export async function GET(request: NextRequest) {
       query = query.contains('interest_tags', [tag]);
     }
 
-    const { data: articles, error, count } = await query;
+    let { data: articles, error, count } = await query;
+
+    // If news_date column doesn't exist yet, retry without it
+    if (error && error.message?.includes('news_date')) {
+      console.warn('⚠️ news_date column not found, falling back to created_at order');
+      let fallbackQuery = supabase
+        .from('articles')
+        .select('*', { count: 'exact' })
+        .eq('published', true)
+        .gte('created_at', todayMidnightISO)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (category) {
+        fallbackQuery = fallbackQuery.eq('category', category);
+      }
+      if (subCategory) {
+        fallbackQuery = fallbackQuery.eq('sub_category', subCategory);
+      }
+      if (tag) {
+        fallbackQuery = fallbackQuery.contains('interest_tags', [tag]);
+      }
+
+      const fallbackResult = await fallbackQuery;
+      articles = fallbackResult.data;
+      error = fallbackResult.error;
+      count = fallbackResult.count;
+    }
 
     if (error) {
       console.error('Supabase articles query error:', error);

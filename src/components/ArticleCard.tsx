@@ -54,7 +54,7 @@ export default function ArticleCard({ article }: ArticleCardProps) {
               </span>
             )}
             <span className="text-[11px] text-zinc-600">
-              {timeAgo(article.created_at)}
+              {timeAgo(article.news_date || article.created_at)}
             </span>
           </div>
           {article.fact_score != null && article.fact_score >= 0 && (
