@@ -86,6 +86,22 @@ REGLER:
 - Fakta-tjek alle påstande mod kilderne og giv en samlet score 0-100
 - Brug markdown-formatering i brødteksten (## overskrifter, **fed**, *kursiv*, lister, etc.)
 
+INTEREST_TAGS – VÆR MEGET STRENG:
+interest_tags er VALGFRIE. De fleste artikler skal have et TOMT array [].
+Tag KUN med et interest_tag hvis artiklen er DIREKTE og PRIMÆRT om det emne.
+Hvis emnet kun nævnes perifært eller tangentielt, tag IKKE.
+
+Gyldige tags og deres STRENGE definitioner:
+- "Tesla" → KUN artikler der primært handler om Tesla Inc, Teslas biler (Model 3/Y/S/X, Cybertruck), Teslas energiprodukter, Tesla-fabrikker, eller Elon Musks Tesla-relaterede aktiviteter. IKKE artikler der bare nævner elbiler generelt.
+- "AI" → KUN artikler der primært handler om kunstig intelligens, machine learning, AI-virksomheder (OpenAI, Google DeepMind, Anthropic), AI-produkter (ChatGPT, Copilot), eller AI-regulering. IKKE artikler der bare nævner "teknologi" eller "digitalisering".
+- "Grøn Energi" → KUN artikler der primært handler om vedvarende energi (vindmøller, solceller), grøn omstilling, energipolitik, klimapolitik relateret til energi, eller specifikke grønne energiprojekter. IKKE artikler om natur, vejr, miljø generelt, dyr, eller is på søer.
+- "Økonomi & Finans" → KUN artikler der primært handler om finansielle markeder, aktiekurser, virksomheders regnskaber, økonomisk politik, BNP, inflation, handel mellem lande, eller banksektoren. IKKE artikler der bare handler om penge i en bred forstand (fx ejendomspriser, lønninger, budgetter).
+- "Renter" → KUN artikler der primært handler om rentesatser, centralbankers rentebeslutninger (ECB, Fed, Nationalbanken), realkreditrenter, obligationsrenter, eller pengepolitik. IKKE artikler der bare nævner økonomi generelt.
+
+Andre gyldige tags (brug også kun ved direkte relevans): "Politik", "Sundhed", "Tech", "Klima", "Krypto", "Ejendomme", "Sport", "Kultur", "Videnskab", "Startups"
+
+TOMMELFINGERREGEL: Hvis du er i tvivl om et tag passer, så LAD VÆRE med at sætte det. De fleste artikler skal have [] som interest_tags.
+
 SVAR I JSON FORMAT:
 {
   "title": "Klar og fængende overskrift",
@@ -100,7 +116,7 @@ SVAR I JSON FORMAT:
   },
   "category": "danmark",
   "sub_category": "generelt",
-  "interest_tags": ["ai", "teknologi"],
+  "interest_tags": [],
   "is_gossip": false
 }`,
           },

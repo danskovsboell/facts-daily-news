@@ -22,66 +22,43 @@ interface UseArticlesReturn {
   count: number;
 }
 
-/** Keywords map for matching interests to article tags */
-const INTEREST_KEYWORDS: Record<string, string[]> = {
-  'Tesla': ['tesla', 'elon musk', 'spacex', 'musk', 'cybertruck', 'model 3', 'model y', 'model s', 'model x', 'supercharger', 'gigafactory'],
-  'AI': ['ai', 'kunstig intelligens', 'artificial intelligence', 'machine learning', 'chatgpt', 'openai', 'grok', 'claude', 'deepmind', 'neural', 'llm'],
-  'Grøn Energi': ['grøn energi', 'green energy', 'vedvarende', 'renewable', 'solenergi', 'solar', 'vindenergi', 'vindmølle', 'bæredygtig', 'sustainable', 'klima', 'climate', 'co2', 'elbil', 'hydrogen'],
-  'Økonomi & Finans': ['økonomi', 'economy', 'finans', 'finance', 'aktie', 'stock', 'marked', 'market', 'investering', 'inflation', 'bnp', 'gdp', 'vækst', 'handel', 'valuta', 'bank', 'børs'],
-  'Renter': ['rente', 'interest rate', 'centralbank', 'ecb', 'nationalbanken', 'fed', 'federal reserve', 'pengepolitik', 'monetary', 'obligat', 'realkredit', 'boliglån', 'mortgage'],
-  'Politik': ['politik', 'government', 'election', 'valg', 'parti', 'minister', 'folketinget', 'parliament'],
-  'Sundhed': ['sundhed', 'health', 'hospital', 'medicin', 'vaccine', 'patient', 'behandling'],
-  'Tech': ['tech', 'teknologi', 'software', 'hardware', 'computer', 'digital', 'app', 'startup'],
-  'Klima': ['klima', 'climate', 'global opvarmning', 'co2', 'emission', 'miljø', 'environment'],
-  'Krypto': ['krypto', 'crypto', 'bitcoin', 'ethereum', 'blockchain', 'nft'],
-  'Ejendomme': ['ejendom', 'bolig', 'hus', 'lejlighed', 'real estate', 'property', 'boligmarked'],
-  'Sport': ['sport', 'fodbold', 'håndbold', 'tennis', 'olympisk', 'champions league', 'superliga'],
-  'Kultur': ['kultur', 'kunst', 'musik', 'film', 'teater', 'museum', 'litteratur'],
-  'Videnskab': ['videnskab', 'science', 'forskning', 'research', 'studie', 'universitet'],
-  'Startups': ['startup', 'iværksætter', 'venture', 'funding', 'serie a', 'accelerator'],
-};
-
-/** Calculate how well an article matches user interests */
-function getInterestScore(article: Article, interests: string[]): number {
-  let score = 0;
+/** Check if an article has any interest_tags that match user interests */
+function hasMatchingInterest(article: Article, interests: string[]): boolean {
   const tags = (article.interest_tags || []).map(t => t.toLowerCase());
-  const titleLower = article.title.toLowerCase();
-  const summaryLower = (article.summary || '').toLowerCase();
-  const searchText = `${titleLower} ${summaryLower} ${tags.join(' ')}`;
+  if (tags.length === 0) return false;
 
-  for (const interest of interests) {
+  return interests.some(interest => {
     const interestLower = interest.toLowerCase();
-
-    // Direct tag match (strongest signal)
-    if (tags.some(tag => tag === interestLower || tag.includes(interestLower) || interestLower.includes(tag))) {
-      score += 3;
-      continue;
-    }
-
-    // Keyword match in title/summary/tags
-    const keywords = INTEREST_KEYWORDS[interest] || [interestLower];
-    for (const keyword of keywords) {
-      if (searchText.includes(keyword)) {
-        score += 2;
-        break;
-      }
-    }
-  }
-
-  return score;
+    return tags.some(tag => tag === interestLower || tag.includes(interestLower) || interestLower.includes(tag));
+  });
 }
 
-/** Sort articles: interest-matching first, then by created_at */
+/**
+ * Sort articles: interest-tagged articles ALWAYS first, then the rest.
+ * Within each group, sorted by created_at (newest first).
+ */
 function prioritizeArticles(articles: Article[], interests: string[]): Article[] {
   if (!interests.length) return articles;
 
-  return [...articles].sort((a, b) => {
-    const scoreA = getInterestScore(a, interests);
-    const scoreB = getInterestScore(b, interests);
-    if (scoreA !== scoreB) return scoreB - scoreA; // Higher interest score first
-    // Same score: keep chronological (newest first)
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
+  const matched: Article[] = [];
+  const rest: Article[] = [];
+
+  for (const article of articles) {
+    if (hasMatchingInterest(article, interests)) {
+      matched.push(article);
+    } else {
+      rest.push(article);
+    }
+  }
+
+  // Sort each group by date (newest first)
+  const byDate = (a: Article, b: Article) =>
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+
+  matched.sort(byDate);
+  rest.sort(byDate);
+
+  return [...matched, ...rest];
 }
 
 export function useArticles({
