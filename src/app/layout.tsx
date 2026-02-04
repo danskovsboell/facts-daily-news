@@ -1,0 +1,31 @@
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+
+const inter = Inter({ subsets: ['latin'] });
+
+export const metadata: Metadata = {
+  title: 'Facts on Daily News – AI Fakta-Check Dashboard',
+  description: 'AI-drevet nyhedsdashboard med fakta-check via Grok (xAI). Danske og internationale nyheder med troværdighedsscore.',
+  keywords: ['nyheder', 'fakta-check', 'AI', 'Grok', 'Danmark', 'dashboard'],
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="da" className="dark">
+      <body className={`${inter.className} min-h-screen bg-zinc-950 text-zinc-100 antialiased`}>
+        <div className="flex min-h-screen flex-col">
+          <Header />
+          <main className="flex-1">{children}</main>
+          <Footer />
+        </div>
+      </body>
+    </html>
+  );
+}
