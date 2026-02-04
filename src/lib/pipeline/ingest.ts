@@ -1,52 +1,28 @@
-import { fetchAllFeeds } from '@/lib/rss';
-import { fetchAllNewsAPI } from '@/lib/newsapi';
-import { fetchMediastackDK } from '@/lib/mediastack';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
-import { RawSource, NewsItem } from '@/lib/types';
+import { discoverNewsViaGrok } from '@/lib/grok-search';
+import { RawSource } from '@/lib/types';
 
-function newsItemToRawSource(item: NewsItem): RawSource {
-  return {
-    id: item.id,
-    title: item.title,
-    description: item.description || '',
-    url: item.link,
-    source_name: item.source,
-    published_at: item.pubDate,
-    fetched_at: new Date().toISOString(),
-    category: item.category,
-    sub_category: item.subCategory,
-    raw_content: item.content || item.description || '',
-    processed: false,
-  };
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
-  ]);
-}
-
-function deduplicateByUrl(sources: RawSource[]): RawSource[] {
-  const seen = new Set<string>();
-  return sources.filter((s) => {
-    const key = s.url.toLowerCase().replace(/\/$/, '');
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
+/**
+ * Ingest news sources via Grok web search.
+ * Discovers current news and stores them in the raw_sources table.
+ */
 export async function ingestSources(): Promise<{ sources: RawSource[]; newCount: number }> {
-  // Fetch from all providers in parallel
-  const [rssItems, newsApiItems, mediastackItems] = await Promise.all([
-    withTimeout(fetchAllFeeds(), 8000, []),
-    withTimeout(fetchAllNewsAPI(), 6000, []),
-    withTimeout(fetchMediastackDK(25), 5000, []),
-  ]);
+  // Discover news via Grok web search
+  const discovery = await discoverNewsViaGrok();
 
-  const allItems = [...rssItems, ...newsApiItems, ...mediastackItems];
-  const rawSources = deduplicateByUrl(allItems.map(newsItemToRawSource));
+  const rawSources: RawSource[] = discovery.stories.map((story, idx) => ({
+    id: `grok_${idx}_${Date.now()}`,
+    title: story.title,
+    description: story.summary || '',
+    url: story.url,
+    source_name: story.source || 'Grok Web Search',
+    published_at: new Date().toISOString(),
+    fetched_at: new Date().toISOString(),
+    category: (story.category as RawSource['category']) || 'verden',
+    sub_category: 'generelt' as const,
+    raw_content: story.summary || '',
+    processed: false,
+  }));
 
   if (isSupabaseConfigured()) {
     const supabase = getSupabase();

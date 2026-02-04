@@ -7,20 +7,18 @@ import { ALL_INTERESTS, DEFAULT_INTERESTS } from '@/lib/constants';
 type ApiStatus = 'active' | 'pending' | 'error' | 'loading';
 
 interface ApiStatuses {
-  rss: ApiStatus;
   grok: ApiStatus;
-  newsapi: ApiStatus;
-  mediastack: ApiStatus;
+  grok_search: ApiStatus;
+  supabase: ApiStatus;
 }
 
 export default function SettingsPage() {
   const [interests, setInterests] = useState<string[]>(DEFAULT_INTERESTS);
   const [saved, setSaved] = useState(false);
   const [apiStatuses, setApiStatuses] = useState<ApiStatuses>({
-    rss: 'loading',
     grok: 'loading',
-    newsapi: 'loading',
-    mediastack: 'loading',
+    grok_search: 'loading',
+    supabase: 'loading',
   });
 
   useEffect(() => {
@@ -43,17 +41,15 @@ export default function SettingsPage() {
         if (!res.ok) throw new Error('Failed to fetch status');
         const data = await res.json();
         setApiStatuses({
-          rss: data.rss || 'active',
           grok: data.grok || 'pending',
-          newsapi: data.newsapi || 'pending',
-          mediastack: data.mediastack || 'pending',
+          grok_search: data.grok_search || 'pending',
+          supabase: data.supabase || 'pending',
         });
       } catch {
         setApiStatuses({
-          rss: 'active',
           grok: 'error',
-          newsapi: 'error',
-          mediastack: 'error',
+          grok_search: 'error',
+          supabase: 'error',
         });
       }
     }
@@ -128,16 +124,17 @@ export default function SettingsPage() {
         <div className="mt-3 space-y-2 text-sm text-zinc-500">
           <p>
             <strong className="text-zinc-400">Facts on Daily News</strong> er et
-            AI-drevet nyhedsdashboard der samler nyheder fra flere kilder og
-            fakta-tjekker dem via Grok (xAI).
+            AI-drevet nyhedsdashboard der bruger Grok (xAI) til at opdage og
+            skrive nyheder i realtid.
           </p>
           <p>
-            Nyheder hentes fra RSS feeds fra bl.a. DR, TV2, Børsen, BBC,
-            Reuters, AP News og Bloomberg.
+            Nyheder opdages via Grok web search og dækker Danmark, Europa,
+            Verden, samt dine interesseområder som Tesla, AI, Grøn Energi,
+            Økonomi & Finans og Renter.
           </p>
           <p>
-            Fakta-score angiver en AI-vurdering af artiklens troværdighed.
-            Scoren bør bruges som en vejledning, ikke som endelig sandhed.
+            Artikler skrives af Grok baseret på de opdagede kilder, og
+            fakta-scores angiver en AI-vurdering af troværdigheden.
           </p>
         </div>
       </section>
@@ -146,10 +143,9 @@ export default function SettingsPage() {
       <section className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
         <h2 className="text-lg font-semibold text-zinc-200">API Status</h2>
         <div className="mt-3 space-y-2">
-          <StatusRow label="RSS Feeds" status={apiStatuses.rss} />
-          <StatusRow label="Grok (xAI)" status={apiStatuses.grok} />
-          <StatusRow label="NewsAPI" status={apiStatuses.newsapi} />
-          <StatusRow label="Mediastack" status={apiStatuses.mediastack} />
+          <StatusRow label="Grok Web Search (Nyhedsopdagelse)" status={apiStatuses.grok_search} />
+          <StatusRow label="Grok (Artikelskrivning)" status={apiStatuses.grok} />
+          <StatusRow label="Supabase (Database)" status={apiStatuses.supabase} />
         </div>
       </section>
     </div>

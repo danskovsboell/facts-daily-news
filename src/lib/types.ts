@@ -36,15 +36,6 @@ export interface Claim {
 export type Category = 'danmark' | 'europa' | 'verden' | 'sladder';
 export type SubCategory = 'generelt' | 'finans';
 
-export interface FeedSource {
-  name: string;
-  url: string;
-  category: Category;
-  subCategory: SubCategory;
-  language: string;
-  logoUrl?: string;
-}
-
 export interface UserSettings {
   interests: string[];
   darkMode: boolean;

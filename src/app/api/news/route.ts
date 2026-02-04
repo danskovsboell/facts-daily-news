@@ -1,160 +1,86 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchAllFeeds } from '@/lib/rss';
-import { fetchAllNewsAPI } from '@/lib/newsapi';
-import { fetchMediastackDK } from '@/lib/mediastack';
-import { batchCategorize } from '@/lib/grok';
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Category, SubCategory, NewsItem } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 25;
 
-// In-memory cache for processed news
-interface NewsCache {
-  items: NewsItem[];
-  timestamp: number;
-}
-
-const newsCache = new Map<string, NewsCache>();
-const NEWS_CACHE_TTL = 5 * 60 * 1000; // 5 min
-
-function getNewsCacheKey(category?: string, subCategory?: string, skipGrok?: boolean): string {
-  return `${category || 'all'}::${subCategory || 'all'}${skipGrok ? '::skip' : ''}`;
-}
-
-// Dedup by URL + title fallback
-function deduplicateItems(items: NewsItem[]): NewsItem[] {
-  const seenUrls = new Set<string>();
-  const seenTitles = new Set<string>();
-  const result: NewsItem[] = [];
-
-  for (const item of items) {
-    // Primær: URL-baseret dedup
-    const urlKey = item.link?.toLowerCase().replace(/\/$/, '');
-    if (urlKey && seenUrls.has(urlKey)) continue;
-    if (urlKey) seenUrls.add(urlKey);
-
-    // Sekundær: titel-dedup (fanger samme historie fra forskellige kilder)
-    const titleKey = item.title.toLowerCase().replace(/\s+/g, ' ').trim();
-    if (seenTitles.has(titleKey)) continue;
-    seenTitles.add(titleKey);
-
-    result.push(item);
-  }
-  return result;
-}
-
-// Race a promise against a timeout
-function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
-  ]);
-}
-
+/**
+ * GET /api/news - Returns news from the articles table (generated from Grok-discovered sources).
+ * 
+ * This route now serves articles from the database rather than fetching from RSS/NewsAPI.
+ * The pipeline is: Grok discovers news → raw_sources → articles/generate → articles table
+ */
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const category = searchParams.get('category') as Category | null;
     const subCategory = searchParams.get('subCategory') as SubCategory | null;
-    const skipGrok = searchParams.get('skipGrok') === 'true';
 
-    // Check cache first
-    const cacheKey = getNewsCacheKey(category || undefined, subCategory || undefined, skipGrok);
-    const cached = newsCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < NEWS_CACHE_TTL) {
-      return NextResponse.json({
-        items: cached.items,
-        count: cached.items.length,
-        fetchedAt: new Date(cached.timestamp).toISOString(),
-        cached: true,
-      });
-    }
-
-    // Fetch RSS + NewsAPI + Mediastack i parallelt, med timeout
-    const [rssItems, newsApiItems, mediastackItems] = await Promise.all([
-      withTimeout(fetchAllFeeds(), 8000, []),
-      withTimeout(fetchAllNewsAPI(), 6000, []),
-      withTimeout(fetchMediastackDK(25), 5000, []),
-    ]);
-
-    // Merge og dedup (RSS prioriteres, derefter NewsAPI, derefter Mediastack)
-    const allItems = deduplicateItems([...rssItems, ...newsApiItems, ...mediastackItems]);
-
-    if (allItems.length === 0) {
+    if (!isSupabaseConfigured()) {
       return NextResponse.json({
         items: [],
         count: 0,
-        fetchedAt: new Date().toISOString(),
-        sources: { rss: rssItems.length, newsapi: newsApiItems.length, mediastack: mediastackItems.length },
+        error: 'Supabase not configured',
       });
     }
 
-    // Sort by date, nyeste først
-    allItems.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
-
-    let processedItems: NewsItem[];
-
-    if (skipGrok || !process.env.GROK_API_KEY) {
-      processedItems = allItems;
-    } else {
-      // Grok batch-kategorisering af top 15 nyeste (single API call)
-      const topForGrok = allItems.slice(0, 15);
-      const categorizations = await withTimeout(
-        batchCategorize(
-          topForGrok.map(item => ({
-            title: item.title,
-            content: item.description?.slice(0, 200),
-          }))
-        ),
-        12000,
-        null
-      ).catch(err => {
-        console.error('Batch categorize failed:', err);
-        return null;
-      });
-
-      // Anvend kategoriseringer
-      processedItems = allItems.map((item, index) => {
-        if (index >= 15 || !categorizations) return item;
-        const cat = categorizations[index];
-        if (!cat) return item;
-
-        return {
-          ...item,
-          grokCategory: cat.category,
-          grokSubCategory: cat.subCategory,
-          isGossip: cat.isGossip,
-          region: cat.region,
-          category: cat.confidence > 60 ? cat.category : item.category,
-          subCategory: cat.confidence > 60 ? cat.subCategory : item.subCategory,
-        };
+    const supabase = getSupabase();
+    if (!supabase) {
+      return NextResponse.json({
+        items: [],
+        count: 0,
+        error: 'Supabase client unavailable',
       });
     }
 
-    // Filtrér efter ønsket kategori
-    let filteredItems = processedItems;
+    // Fetch recent raw_sources as NewsItem-compatible objects
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    let query = supabase
+      .from('raw_sources')
+      .select('*')
+      .gte('fetched_at', oneDayAgo)
+      .order('fetched_at', { ascending: false })
+      .limit(50);
+
     if (category) {
-      filteredItems = processedItems.filter(item => item.category === category);
+      query = query.eq('category', category);
     }
     if (subCategory) {
-      filteredItems = filteredItems.filter(item => item.subCategory === subCategory);
+      query = query.eq('sub_category', subCategory);
     }
 
-    // Sort by date
-    filteredItems.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
+    const { data: rawSources, error } = await query;
 
-    // Cache
-    newsCache.set(cacheKey, {
-      items: filteredItems,
-      timestamp: Date.now(),
-    });
+    if (error) {
+      console.error('Supabase query error:', error);
+      return NextResponse.json({
+        items: [],
+        count: 0,
+        error: error.message,
+      });
+    }
+
+    // Map raw_sources to NewsItem format for backwards compatibility
+    const items: NewsItem[] = (rawSources || []).map((s: Record<string, unknown>) => ({
+      id: s.id as string,
+      title: s.title as string,
+      description: (s.description as string) || '',
+      content: (s.raw_content as string) || '',
+      link: s.url as string,
+      pubDate: (s.published_at as string) || (s.fetched_at as string) || new Date().toISOString(),
+      source: (s.source_name as string) || 'Grok Web Search',
+      sourceUrl: s.url as string,
+      category: (s.category as Category) || 'verden',
+      subCategory: (s.sub_category as SubCategory) || 'generelt',
+    }));
 
     return NextResponse.json({
-      items: filteredItems,
-      count: filteredItems.length,
+      items,
+      count: items.length,
       fetchedAt: new Date().toISOString(),
-      grokEnabled: !!process.env.GROK_API_KEY,
-      sources: { rss: rssItems.length, newsapi: newsApiItems.length, mediastack: mediastackItems.length },
+      source: 'grok_web_search',
     });
   } catch (error) {
     console.error('News API error:', error);

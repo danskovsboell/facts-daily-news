@@ -1,33 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
-import { fetchAllFeeds } from '@/lib/rss';
-import { fetchAllNewsAPI } from '@/lib/newsapi';
-import { fetchMediastackDK } from '@/lib/mediastack';
+import { discoverNewsViaGrok } from '@/lib/grok-search';
 import { batchCategorize } from '@/lib/grok';
-import { NewsItem } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // Vercel Pro plan
-
-// Dedup by URL
-function deduplicateItems(items: NewsItem[]): NewsItem[] {
-  const seenUrls = new Set<string>();
-  const result: NewsItem[] = [];
-  for (const item of items) {
-    const urlKey = item.link?.toLowerCase().replace(/\/$/, '');
-    if (urlKey && seenUrls.has(urlKey)) continue;
-    if (urlKey) seenUrls.add(urlKey);
-    result.push(item);
-  }
-  return result;
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
-  ]);
-}
+export const maxDuration = 120; // Grok web search can take a while with multiple queries
 
 export async function GET() {
   try {
@@ -43,57 +20,54 @@ export async function GET() {
       return NextResponse.json({ error: 'Supabase client unavailable' }, { status: 503 });
     }
 
-    // Fetch from all sources in parallel
-    const [rssItems, newsApiItems, mediastackItems] = await Promise.all([
-      withTimeout(fetchAllFeeds(), 8000, []),
-      withTimeout(fetchAllNewsAPI(), 6000, []),
-      withTimeout(fetchMediastackDK(25), 5000, []),
-    ]);
+    if (!process.env.GROK_API_KEY) {
+      return NextResponse.json({ error: 'GROK_API_KEY not configured' }, { status: 503 });
+    }
 
-    const allItems = deduplicateItems([...rssItems, ...newsApiItems, ...mediastackItems]);
+    // ── Step 1: Discover news via Grok web search ──────────
+    const discovery = await discoverNewsViaGrok();
 
-    if (allItems.length === 0) {
+    if (discovery.stories.length === 0) {
       return NextResponse.json({
         inserted: 0,
-        sources: { rss: 0, newsapi: 0, mediastack: 0 },
+        source: 'grok_web_search',
+        errors: discovery.errors.length > 0 ? discovery.errors : undefined,
       });
     }
 
-    // Batch categorize top items with Grok
-    const topItems = allItems.slice(0, 30);
-    const categorizations = await withTimeout(
-      batchCategorize(topItems.map(item => ({
-        title: item.title,
-        content: item.description?.slice(0, 200),
-      }))),
-      12000,
-      null
-    ).catch(() => null);
+    // ── Step 2: Batch categorize all stories with Grok ─────
+    // This gives us proper category (danmark/europa/verden/sladder) and sub_category (generelt/finans)
+    const categorizations = await batchCategorize(
+      discovery.stories.map(story => ({
+        title: story.title,
+        content: story.summary?.slice(0, 300),
+      }))
+    ).catch(err => {
+      console.error('Batch categorize failed:', err);
+      return null;
+    });
 
-    // Apply categorizations
-    if (categorizations) {
-      for (let i = 0; i < Math.min(topItems.length, categorizations.length); i++) {
-        const cat = categorizations[i];
-        if (cat && cat.confidence > 60) {
-          topItems[i].category = cat.category;
-          topItems[i].subCategory = cat.subCategory;
-        }
-      }
-    }
+    // ── Step 3: Build rows for Supabase ────────────────────
+    const rows = discovery.stories.map((story, idx) => {
+      // Use Grok categorization if available, otherwise fall back to search query category
+      const cat = categorizations?.[idx];
+      const category = (cat && cat.confidence > 50) ? cat.category : story.category;
+      const subCategory = (cat && cat.confidence > 50) ? cat.subCategory : 'generelt';
 
-    // Upsert into raw_sources (ignore duplicates via URL)
-    const rows = allItems.map((item, idx) => ({
-      title: item.title,
-      description: item.description || null,
-      url: item.link,
-      source_name: item.source,
-      published_at: item.pubDate ? new Date(item.pubDate).toISOString() : null,
-      category: idx < topItems.length ? topItems[idx].category : item.category,
-      sub_category: idx < topItems.length ? topItems[idx].subCategory : item.subCategory,
-      raw_content: (item.content || item.description || '').slice(0, 5000),
-      processed: false,
-    }));
+      return {
+        title: story.title,
+        description: story.summary || null,
+        url: story.url,
+        source_name: story.source || 'Grok Web Search',
+        published_at: new Date().toISOString(), // Grok discovers "today's" news
+        category,
+        sub_category: subCategory,
+        raw_content: story.summary || '',
+        processed: false,
+      };
+    });
 
+    // ── Step 4: Upsert into raw_sources ────────────────────
     const { data, error } = await supabase
       .from('raw_sources')
       .upsert(rows, { onConflict: 'url', ignoreDuplicates: true })
@@ -109,13 +83,19 @@ export async function GET() {
 
     return NextResponse.json({
       inserted: data?.length || 0,
-      total_fetched: allItems.length,
-      sources: {
-        rss: rssItems.length,
-        newsapi: newsApiItems.length,
-        mediastack: mediastackItems.length,
-      },
-      categorized: categorizations ? Math.min(topItems.length, categorizations.length) : 0,
+      total_discovered: discovery.stories.length,
+      source: 'grok_web_search',
+      searches: discovery.totalSearches,
+      duration_ms: discovery.totalDurationMs,
+      categorized: categorizations ? Math.min(discovery.stories.length, categorizations.length) : 0,
+      errors: discovery.errors.length > 0 ? discovery.errors : undefined,
+      breakdown: discovery.results.map(r => ({
+        query: r.query,
+        stories: r.stories.length,
+        web_searches: r.searchCalls,
+        duration_ms: r.durationMs,
+        error: r.error || undefined,
+      })),
     });
   } catch (error) {
     console.error('Sources fetch error:', error);
