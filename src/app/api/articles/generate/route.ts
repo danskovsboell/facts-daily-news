@@ -78,8 +78,8 @@ function isDuplicate(newTitle: string, existingTitles: string[]): { isDup: boole
 
 // ─── Interest matching ───────────────────────────────────────
 
-/** Keywords map for each interest area */
-const INTEREST_KEYWORDS: Record<string, string[]> = {
+/** Static keywords map for well-known interest areas */
+const STATIC_INTEREST_KEYWORDS: Record<string, string[]> = {
   'Tesla': ['tesla', 'elon musk', 'spacex', 'musk', 'cybertruck', 'model 3', 'model y', 'model s', 'model x', 'supercharger', 'gigafactory', 'elektr'],
   'AI': ['ai', 'kunstig intelligens', 'artificial intelligence', 'machine learning', 'chatgpt', 'openai', 'grok', 'claude', 'deepmind', 'neural', 'llm', 'generat'],
   'Grøn Energi': ['grøn energi', 'green energy', 'vedvarende', 'renewable', 'solenergi', 'solar', 'vindenergi', 'wind power', 'vindmølle', 'bæredygtig', 'sustainable', 'klima', 'climate', 'co2', 'emission', 'elbil', 'electric vehicle', 'hydrogen', 'batteri'],
@@ -87,13 +87,49 @@ const INTEREST_KEYWORDS: Record<string, string[]> = {
   'Renter': ['rente', 'interest rate', 'centralbank', 'central bank', 'ecb', 'nationalbanken', 'fed', 'federal reserve', 'pengepolitik', 'monetary', 'obligat', 'bond', 'realkredit', 'boliglån', 'mortgage'],
 };
 
+/** Fetch all interest names from the DB (predefined + custom) for tagging */
+async function getAllInterestNames(): Promise<string[]> {
+  try {
+    const supabase = getSupabase();
+    if (!supabase) return DEFAULT_INTERESTS;
+
+    const { data, error } = await supabase
+      .from('interests')
+      .select('name')
+      .gt('active_users', 0);
+
+    if (error || !data || data.length === 0) {
+      return DEFAULT_INTERESTS;
+    }
+
+    return data.map((i: { name: string }) => i.name);
+  } catch {
+    return DEFAULT_INTERESTS;
+  }
+}
+
+/** Build dynamic keywords map: static keywords + custom interest names as keywords */
+function buildInterestKeywords(allInterests: string[]): Record<string, string[]> {
+  const keywords: Record<string, string[]> = { ...STATIC_INTEREST_KEYWORDS };
+  
+  // For interests not in the static map, use their name (lowercased) as a keyword
+  for (const interest of allInterests) {
+    if (!keywords[interest]) {
+      keywords[interest] = [interest.toLowerCase()];
+    }
+  }
+
+  return keywords;
+}
+
 /** Score how well a source matches user interests (0 = no match, higher = better match) */
-function interestScore(source: RawSource, interests: string[]): number {
+function interestScore(source: RawSource, interests: string[], keywordsMap?: Record<string, string[]>): number {
   const searchText = `${source.title} ${source.description || ''}`.toLowerCase();
+  const kw = keywordsMap || STATIC_INTEREST_KEYWORDS;
   let score = 0;
 
   for (const interest of interests) {
-    const keywords = INTEREST_KEYWORDS[interest] || [interest.toLowerCase()];
+    const keywords = kw[interest] || [interest.toLowerCase()];
     for (const keyword of keywords) {
       if (searchText.includes(keyword)) {
         score += 1;
@@ -106,10 +142,10 @@ function interestScore(source: RawSource, interests: string[]): number {
 }
 
 /** Sort sources so interest-matching ones come first */
-function prioritizeByInterests(sources: RawSource[], interests: string[]): RawSource[] {
+function prioritizeByInterests(sources: RawSource[], interests: string[], keywordsMap?: Record<string, string[]>): RawSource[] {
   return [...sources].sort((a, b) => {
-    const scoreA = interestScore(a, interests);
-    const scoreB = interestScore(b, interests);
+    const scoreA = interestScore(a, interests, keywordsMap);
+    const scoreB = interestScore(b, interests, keywordsMap);
     return scoreB - scoreA; // Higher score first
   });
 }
@@ -153,7 +189,7 @@ function groupSources(sources: RawSource[]): RawSource[][] {
 
 // ─── Article generation ──────────────────────────────────────
 
-async function generateArticle(sources: RawSource[]): Promise<{
+async function generateArticle(sources: RawSource[], interestNames?: string[]): Promise<{
   title: string;
   summary: string;
   body: string;
@@ -170,7 +206,7 @@ async function generateArticle(sources: RawSource[]): Promise<{
     `Kilde ${i + 1}: ${s.source_name}\nOverskrift: ${s.title}\nBeskrivelse: ${s.description || '(ingen)'}\nIndhold: ${(s.raw_content || '').slice(0, 1500)}\nURL: ${s.url}`
   ).join('\n\n');
 
-  const interestsList = DEFAULT_INTERESTS.join(', ');
+  const interestsList = (interestNames || DEFAULT_INTERESTS).join(', ');
 
   const systemPrompt = `Du er en professionel nyhedsjournalist. Skriv en original dansk artikel baseret på følgende kilder.
 
@@ -351,9 +387,11 @@ export async function GET() {
       return !urlUsed;
     });
 
-    // ── Step 3b: Prioritize sources by user interests ────────
-    const prioritizedSources = prioritizeByInterests(freshSources, DEFAULT_INTERESTS);
-    const interestMatchCount = prioritizedSources.filter(s => interestScore(s, DEFAULT_INTERESTS) > 0).length;
+    // ── Step 3b: Fetch dynamic interests and prioritize ─────
+    const allInterestNames = await getAllInterestNames();
+    const dynamicKeywords = buildInterestKeywords(allInterestNames);
+    const prioritizedSources = prioritizeByInterests(freshSources, allInterestNames, dynamicKeywords);
+    const interestMatchCount = prioritizedSources.filter(s => interestScore(s, allInterestNames, dynamicKeywords) > 0).length;
 
     if (prioritizedSources.length === 0) {
       // Mark remaining as processed anyway
@@ -392,7 +430,7 @@ export async function GET() {
           continue;
         }
 
-        const article = await generateArticle(group);
+        const article = await generateArticle(group, allInterestNames);
         if (!article || !article.body || article.body.length < 50) {
           errors.push(`Group ${i}: generation returned empty/short article`);
           // Still mark as processed to avoid retrying bad sources
@@ -466,7 +504,7 @@ export async function GET() {
       raw_sources_count: rawSources.length,
       fresh_sources_count: freshSources.length,
       interest_match_count: interestMatchCount,
-      interests_used: DEFAULT_INTERESTS,
+      interests_used: allInterestNames,
     });
   } catch (error) {
     console.error('Article generation error:', error);

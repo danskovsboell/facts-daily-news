@@ -160,6 +160,15 @@ export default function SettingsPage() {
       setSelectedIds((prev) => new Set(prev).add(id));
     }
 
+    // Fire-and-forget: immediately search for news about this new interest
+    fetch('/api/trigger-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ interestName: name }),
+    }).catch(() => {
+      // Non-blocking — silently ignore errors
+    });
+
     setCustomInput('');
     setSaved(false);
     setError(null);
@@ -175,6 +184,11 @@ export default function SettingsPage() {
     setSaving(true);
     setError(null);
 
+    // Detect newly selected interests (not previously saved)
+    const newlySelected = Array.from(selectedIds).filter(
+      (id) => !userInterestIds.has(id)
+    );
+
     const { error: saveError } = await saveInterests(Array.from(selectedIds));
     if (saveError) {
       setError(saveError);
@@ -185,6 +199,22 @@ export default function SettingsPage() {
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+
+    // Fire-and-forget: trigger immediate search for newly added interests
+    if (newlySelected.length > 0) {
+      const newInterests = allInterests.filter((i) => newlySelected.includes(i.id));
+      for (const interest of newInterests) {
+        fetch('/api/trigger-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            interestName: interest.name,
+          }),
+        }).catch(() => {
+          // Non-blocking — silently ignore errors
+        });
+      }
+    }
   };
 
   return (

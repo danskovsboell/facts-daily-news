@@ -3,11 +3,16 @@
  * 
  * Uses grok-4-1-fast-non-reasoning with web_search tool to discover
  * real-time news across categories and interest areas.
+ * 
+ * Also searches for news about active custom user interests from the DB.
  */
+
+import { getSupabase } from '@/lib/supabase';
 
 const GROK_API_KEY = process.env.GROK_API_KEY;
 const RESPONSES_API_URL = 'https://api.x.ai/v1/responses';
 const MODEL = 'grok-4-1-fast-non-reasoning';
+const MAX_CUSTOM_INTEREST_SEARCHES = 10;
 
 // ============================================================
 // Types
@@ -275,6 +280,60 @@ async function searchNews(
 }
 
 // ============================================================
+// Custom interests: Fetch active custom interests from DB
+// ============================================================
+interface CustomInterest {
+  id: string;
+  name: string;
+  slug: string;
+  search_prompt: string;
+  category: string;
+  active_users: number;
+}
+
+async function getActiveCustomInterests(): Promise<CustomInterest[]> {
+  try {
+    const supabase = getSupabase();
+    if (!supabase) {
+      console.warn('⚠️ Supabase not configured, skipping custom interest searches');
+      return [];
+    }
+
+    const { data, error } = await supabase
+      .from('interests')
+      .select('id, name, slug, search_prompt, category, active_users')
+      .eq('is_predefined', false)
+      .gt('active_users', 0)
+      .not('search_prompt', 'is', null)
+      .order('active_users', { ascending: false })
+      .limit(MAX_CUSTOM_INTEREST_SEARCHES);
+
+    if (error) {
+      console.error('❌ Error fetching custom interests:', error.message);
+      return [];
+    }
+
+    return (data || []) as CustomInterest[];
+  } catch (err) {
+    console.error('❌ Failed to fetch custom interests:', err);
+    return [];
+  }
+}
+
+/** Build a Grok search prompt for a custom interest */
+function buildCustomInterestPrompt(interest: CustomInterest): string {
+  const basePrompt = interest.search_prompt;
+  const category = interest.category || 'custom';
+
+  return `${basePrompt}
+
+Return ONLY valid JSON (no markdown, no extra text, no grok:render tags):
+{"stories": [{"title": "...", "source": "...", "url": "...", "summary": "one sentence in Danish", "category": "${category}"}]}
+
+Find 3-5 stories.`;
+}
+
+// ============================================================
 // Main export: Discover all news via Grok web search
 // ============================================================
 export async function discoverNewsViaGrok(): Promise<{
@@ -283,22 +342,45 @@ export async function discoverNewsViaGrok(): Promise<{
   totalSearches: number;
   totalDurationMs: number;
   errors: string[];
+  customInterestCount: number;
 }> {
   const start = Date.now();
   const errors: string[] = [];
 
-  // Run all searches in parallel for speed
-  const results = await Promise.all(
-    SEARCH_QUERIES.map(query =>
-      searchNews(query.prompt, query.category, query.label, 45000)
-    )
-  );
+  // Run hardcoded searches and fetch custom interests in parallel
+  const [hardcodedResults, customInterests] = await Promise.all([
+    Promise.all(
+      SEARCH_QUERIES.map(query =>
+        searchNews(query.prompt, query.category, query.label, 45000)
+      )
+    ),
+    getActiveCustomInterests(),
+  ]);
+
+  // Run custom interest searches in parallel (if any)
+  let customResults: GrokSearchResult[] = [];
+  if (customInterests.length > 0) {
+    console.log(`🎯 Running ${customInterests.length} custom interest searches: ${customInterests.map(i => i.name).join(', ')}`);
+    customResults = await Promise.all(
+      customInterests.map(interest =>
+        searchNews(
+          buildCustomInterestPrompt(interest),
+          interest.category || 'custom',
+          `Custom: ${interest.name}`,
+          45000
+        )
+      )
+    );
+  }
+
+  // Combine all results
+  const allResults = [...hardcodedResults, ...customResults];
 
   // Collect all stories, dedup by URL
   const seenUrls = new Set<string>();
   const allStories: GrokNewsStory[] = [];
 
-  for (const result of results) {
+  for (const result of allResults) {
     if (result.error) {
       errors.push(`${result.query}: ${result.error}`);
       continue;
@@ -309,32 +391,48 @@ export async function discoverNewsViaGrok(): Promise<{
       if (urlKey && !seenUrls.has(urlKey)) {
         seenUrls.add(urlKey);
         
-        // Map the search query category to the story
+        // Map the search query category to the story (for hardcoded queries)
         const queryDef = SEARCH_QUERIES.find(q => q.label === result.query);
         if (queryDef) {
           story.category = queryDef.category;
         }
+        // For custom interest searches, the category is already set by buildCustomInterestPrompt
         
         allStories.push(story);
       }
     }
   }
 
-  const totalSearches = results.reduce((sum, r) => sum + r.searchCalls, 0);
+  const totalSearches = allResults.reduce((sum, r) => sum + r.searchCalls, 0);
   const totalDurationMs = Date.now() - start;
 
-  console.log(`🔍 Grok News Discovery: ${allStories.length} unique stories from ${results.length} searches (${totalSearches} web searches) in ${(totalDurationMs / 1000).toFixed(1)}s`);
+  console.log(`🔍 Grok News Discovery: ${allStories.length} unique stories from ${allResults.length} searches (${hardcodedResults.length} hardcoded + ${customResults.length} custom) (${totalSearches} web searches) in ${(totalDurationMs / 1000).toFixed(1)}s`);
   if (errors.length > 0) {
     console.warn(`⚠️ Grok search errors: ${errors.join(', ')}`);
   }
 
   return {
     stories: allStories,
-    results,
+    results: allResults,
     totalSearches,
     totalDurationMs,
     errors,
+    customInterestCount: customInterests.length,
   };
+}
+
+// ============================================================
+// Single interest search (used by /api/trigger-search)
+// ============================================================
+export async function searchSingleInterest(
+  interestName: string,
+  searchPrompt?: string,
+): Promise<GrokSearchResult> {
+  const prompt = searchPrompt
+    ? `${searchPrompt}\n\nReturn ONLY valid JSON (no markdown, no extra text, no grok:render tags):\n{"stories": [{"title": "...", "source": "...", "url": "...", "summary": "one sentence in Danish", "category": "custom"}]}\n\nFind 3-6 stories.`
+    : `Search for today's latest news about ${interestName}. Find recent articles, developments, and updates.\n\nReturn ONLY valid JSON (no markdown, no extra text, no grok:render tags):\n{"stories": [{"title": "...", "source": "...", "url": "...", "summary": "one sentence in Danish", "category": "custom"}]}\n\nFind 3-6 stories.`;
+
+  return searchNews(prompt, 'custom', `Instant: ${interestName}`, 45000);
 }
 
 // ============================================================
