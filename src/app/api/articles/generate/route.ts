@@ -11,8 +11,8 @@ const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
 const ARTICLE_MODEL = 'grok-3-mini';
 
 // Batch config: process small batches per cron invocation
-const MAX_SOURCES_PER_RUN = 25;
-const MAX_ARTICLES_PER_RUN = 5;
+const MAX_SOURCES_PER_RUN = 50;
+const MAX_ARTICLES_PER_RUN = 15;
 
 // ─── Dedup helpers ───────────────────────────────────────────
 
@@ -209,7 +209,16 @@ async function generateArticle(sources: RawSource[], interestNames?: string[]): 
 
   const interestsList = (interestNames || DEFAULT_INTERESTS).join(', ');
 
+  const now = new Date();
+  const currentMonth = now.toLocaleString('da-DK', { month: 'long', year: 'numeric' });
+
   const systemPrompt = `Du er en professionel nyhedsjournalist. Skriv en original dansk artikel baseret på følgende kilder.
+
+DATO-KONTEKST: Vi er i ${currentMonth}. Du skriver nyheder for ${currentMonth}.
+- Ignorer information der er ældre end en uge
+- Alle artikler SKAL handle om aktuelle begivenheder i ${now.getFullYear()}
+- Hvis kildematerialet primært handler om begivenheder fra ${now.getFullYear() - 1} eller tidligere, skal du IKKE skrive artiklen — returner {"skip": true} i stedet
+- Brug IKKE årstallet ${now.getFullYear() - 1} i overskriften medmindre det er i kontekst af en sammenligning med nutiden
 
 LÆSERENS INTERESSEOMRÅDER: ${interestsList}
 Fokuser på aspekter der er relevante for disse interesser. Hvis kildematerialet handler om et af disse emner, fremhæv det tydeligt. Tilføj relevante interest_tags baseret på indholdet.
@@ -286,6 +295,12 @@ SVAR I JSON FORMAT:
 
     const parsed = JSON.parse(content);
 
+    // If Grok determined the sources are too old, skip
+    if (parsed.skip) {
+      console.log('Grok skipped article — sources too old');
+      return null;
+    }
+
     return {
       title: parsed.title || sources[0].title,
       summary: parsed.summary || '',
@@ -328,13 +343,13 @@ export async function GET() {
       return NextResponse.json({ error: 'GROK_API_KEY not configured' }, { status: 503 });
     }
 
-    // ── Step 1: Fetch unprocessed sources (small batch) ──────
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    // ── Step 1: Fetch unprocessed sources (small batch, last 48h) ──
+    const twoDaysAgoSources = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
     const { data: rawSources, error: fetchError } = await supabase
       .from('raw_sources')
       .select('*')
       .eq('processed', false)
-      .gte('fetched_at', oneDayAgo)
+      .gte('fetched_at', twoDaysAgoSources)
       .order('fetched_at', { ascending: false })
       .limit(MAX_SOURCES_PER_RUN);
 
@@ -435,6 +450,18 @@ export async function GET() {
         if (!article || !article.body || article.body.length < 50) {
           errors.push(`Group ${i}: generation returned empty/short article`);
           // Still mark as processed to avoid retrying bad sources
+          const sourceIds = group.map(s => s.id);
+          await supabase.from('raw_sources').update({ processed: true }).in('id', sourceIds);
+          continue;
+        }
+
+        // Post-check: reject articles about previous years
+        const lastYear = String(new Date().getFullYear() - 1);
+        const titleMentionsOldYear = article.title.includes(lastYear);
+        const bodyMainlyOldYear = (article.body.match(new RegExp(lastYear, 'g')) || []).length > 2 &&
+          !(article.body.match(new RegExp(String(new Date().getFullYear()), 'g')) || []).length;
+        if (titleMentionsOldYear || bodyMainlyOldYear) {
+          console.log(`Skipping old-year article: "${article.title}"`);
           const sourceIds = group.map(s => s.id);
           await supabase.from('raw_sources').update({ processed: true }).in('id', sourceIds);
           continue;
