@@ -1,18 +1,23 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import TabNavigation from '@/components/TabNavigation';
 import ArticleCard from '@/components/ArticleCard';
 import InterestFilter from '@/components/InterestFilter';
 import MyNewsView from '@/components/MyNewsView';
 import { useArticles } from '@/hooks/useArticles';
+import { usePersistedState } from '@/hooks/usePersistedState';
+import { useScrollRestore } from '@/hooks/useScrollRestore';
 import { articleMatchesTag } from '@/lib/interest-utils';
 import { Category, SubCategory, TabId } from '@/lib/types';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<TabId>('dine-nyheder');
-  const [activeSubTab, setActiveSubTab] = useState<SubCategory>('generelt');
-  const [filterTag, setFilterTag] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = usePersistedState<TabId>('facts-activeTab', 'dine-nyheder');
+  const [activeSubTab, setActiveSubTab] = usePersistedState<SubCategory>('facts-activeSubTab', 'generelt');
+  const [filterTag, setFilterTag] = usePersistedState<string | null>('facts-filterTag', null);
+
+  // Restore scroll position when returning from article
+  useScrollRestore();
 
   const isMyNews = activeTab === 'dine-nyheder';
 

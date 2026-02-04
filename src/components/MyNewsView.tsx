@@ -1,9 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { useArticles } from '@/hooks/useArticles';
 import { useUserInterests } from '@/hooks/useUserInterests';
+import { usePersistedState } from '@/hooks/usePersistedState';
 import { Article, Category } from '@/lib/types';
 import {
   articleMatchesTag,
@@ -20,7 +21,7 @@ const SECTIONS: { category: Category; label: string; emoji: string }[] = [
 
 export default function MyNewsView() {
   const { userInterestNames, loading: interestsLoading } = useUserInterests();
-  const [filterTag, setFilterTag] = useState<string | null>(null);
+  const [filterTag, setFilterTag] = usePersistedState<string | null>('facts-myNewsFilterTag', null);
 
   const {
     articles,
