@@ -162,7 +162,7 @@ export default function FactScore({ score: initialScore, details: initialDetails
         )}
 
         {showDetails && !loading && details && (
-          <DetailsPopup details={details} onClose={() => setShowDetails(false)} />
+          <DetailsPopup details={details} onClose={() => setShowDetails(false)} onReCheck={() => runFactCheck(true)} loading={loading} />
         )}
       </div>
     );
@@ -227,13 +227,13 @@ export default function FactScore({ score: initialScore, details: initialDetails
       )}
 
       {showDetails && !loading && details && (
-        <DetailsPopup details={details} onClose={() => setShowDetails(false)} />
+        <DetailsPopup details={details} onClose={() => setShowDetails(false)} onReCheck={() => runFactCheck(true)} loading={loading} />
       )}
     </div>
   );
 }
 
-function DetailsPopup({ details, onClose }: { details: FactCheckResult; onClose: () => void }) {
+function DetailsPopup({ details, onClose, onReCheck, loading }: { details: FactCheckResult; onClose: () => void; onReCheck?: () => void; loading?: boolean }) {
   const [expandedClaim, setExpandedClaim] = useState<number | null>(null);
 
   return (
@@ -392,6 +392,24 @@ function DetailsPopup({ details, onClose }: { details: FactCheckResult; onClose:
           {details.verificationMethod === 'web-search' ? '🌐 Grok + Websøgning' : '🤖 Grok AI'}
         </span>
       </div>
+
+      {/* Re-check button inside popup */}
+      {onReCheck && (
+        <button
+          onClick={onReCheck}
+          disabled={loading}
+          className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg border border-accent-500/40 bg-accent-500/10 px-4 py-2.5 text-sm font-semibold text-accent-400 transition-all hover:bg-accent-500/20 hover:border-accent-500/60 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? (
+            <>
+              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-accent-400 border-t-transparent" />
+              Tjekker igen...
+            </>
+          ) : (
+            <>🔄 Tjek igen med websøgning</>
+          )}
+        </button>
+      )}
     </div>
   );
 }
