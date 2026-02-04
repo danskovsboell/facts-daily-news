@@ -34,8 +34,24 @@ export default function NewsCard({ item }: NewsCardProps) {
             <span className="text-[11px] text-zinc-600">
               {timeAgo(item.pubDate)}
             </span>
+            {item.isGossip && (
+              <span className="rounded-full bg-pink-500/20 px-1.5 py-0.5 text-[10px] font-medium text-pink-400">
+                🗣️ Sladder
+              </span>
+            )}
+            {item.region && item.region !== 'unknown' && (
+              <span className="text-[10px] text-zinc-600">
+                📍 {item.region}
+              </span>
+            )}
           </div>
-          <FactScore score={item.factScore} details={item.factDetails} />
+          <FactScore
+            score={item.factScore}
+            details={item.factDetails}
+            articleTitle={item.title}
+            articleContent={item.description || item.content}
+            articleSource={item.source}
+          />
         </div>
 
         {/* Title */}
@@ -67,6 +83,11 @@ export default function NewsCard({ item }: NewsCardProps) {
           >
             Læs mere →
           </a>
+          {item.grokCategory && item.grokCategory !== item.category && (
+            <span className="text-[10px] text-zinc-600 italic">
+              AI: {item.grokCategory}
+            </span>
+          )}
         </div>
       </div>
     </article>

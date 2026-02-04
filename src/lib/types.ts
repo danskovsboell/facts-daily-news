@@ -12,12 +12,18 @@ export interface NewsItem {
   factScore?: number;
   factDetails?: FactCheckResult;
   imageUrl?: string;
+  grokCategory?: Category;
+  grokSubCategory?: SubCategory;
+  isGossip?: boolean;
+  region?: string;
 }
 
 export interface FactCheckResult {
   score: number; // 0-100
   summary: string;
   claims: Claim[];
+  sources?: string[];
+  category?: string;
   checkedAt: string;
 }
 
@@ -54,4 +60,12 @@ export interface TabItem {
 export interface SubTabItem {
   id: SubCategory;
   label: string;
+}
+
+export interface GrokCategorizationResult {
+  category: Category;
+  subCategory: SubCategory;
+  region: string;
+  isGossip: boolean;
+  confidence: number;
 }

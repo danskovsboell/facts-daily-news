@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { factCheck } from '@/lib/grok';
+import { factCheck, getCacheStats } from '@/lib/grok';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 30; // Allow longer for detailed fact-check
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,6 +16,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!process.env.GROK_API_KEY) {
+      return NextResponse.json(
+        { error: 'Grok API not configured', score: -1 },
+        { status: 503 }
+      );
+    }
+
+    // Full detailed fact-check (uses grok-3-mini for quality)
     const result = await factCheck(title, content || '', source || 'unknown');
 
     return NextResponse.json(result);
@@ -25,4 +34,14 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// GET endpoint for cache stats (debug)
+export async function GET() {
+  const stats = getCacheStats();
+  return NextResponse.json({
+    status: 'ok',
+    grokConfigured: !!process.env.GROK_API_KEY,
+    cache: stats,
+  });
 }
