@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { factCheck, getCacheStats } from '@/lib/grok';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // Allow longer for deep web-search fact-check (multiple API calls)
+export const maxDuration = 45; // Single Grok web-search call
 
 export async function POST(request: NextRequest) {
   try {

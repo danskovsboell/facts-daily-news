@@ -141,15 +141,7 @@ export default function FactScore({ score: initialScore, details: initialDetails
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-[11px] text-zinc-500">
                   <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent-500/50" />
-                  Udtrækker nøglepåstande...
-                </div>
-                <div className="flex items-center gap-2 text-[11px] text-zinc-600">
-                  <span className="inline-block h-2 w-2 rounded-full bg-zinc-700" />
-                  Verificerer mod websøgning...
-                </div>
-                <div className="flex items-center gap-2 text-[11px] text-zinc-600">
-                  <span className="inline-block h-2 w-2 rounded-full bg-zinc-700" />
-                  Sammenstiller kilder...
+                  Fakta-checker med websøgning...
                 </div>
               </div>
             </div>
