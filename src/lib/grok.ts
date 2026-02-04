@@ -5,9 +5,9 @@ const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
 const GROK_RESPONSES_URL = 'https://api.x.ai/v1/responses';
 
 // Models
-const FAST_MODEL = 'grok-3-mini-fast'; // Hurtig + billig til kategorisering
+const FAST_MODEL = 'grok-3-mini'; // Hurtig til kategorisering (grok-3-mini-fast deprecated)
 const QUALITY_MODEL = 'grok-3-mini';   // Bedre kvalitet til fakta-check
-const SEARCH_MODEL = 'grok-3-mini-fast'; // For web search verification
+const SEARCH_MODEL = 'grok-4-1-fast-non-reasoning'; // For web search (Responses API kræver grok-4 family)
 
 // ============================================================
 // In-memory cache for fact-check results
@@ -251,7 +251,7 @@ Verdict-guide:
 - "false": Modbevist af pålidelige kilder
 - "unverified": Ikke nok evidens til at afgøre`;
 
-    const { text, citations, searchCalls } = await callGrokWithWebSearch(prompt, 45000);
+    const { text, citations, searchCalls } = await callGrokWithWebSearch(prompt, 40000);
 
     // Parse JSON from response
     let jsonStr = text.trim();

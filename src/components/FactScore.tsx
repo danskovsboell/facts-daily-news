@@ -72,6 +72,7 @@ export default function FactScore({ score: initialScore, details: initialDetails
   const [loading, setLoading] = useState(false);
   const [score, setScore] = useState(initialScore);
   const [details, setDetails] = useState(initialDetails);
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch fact-check on demand (initial check)
   const handleFactCheck = async () => {
@@ -97,7 +98,9 @@ export default function FactScore({ score: initialScore, details: initialDetails
   const runFactCheck = async (force: boolean) => {
     setLoading(true);
     setShowDetails(true);
+    setError(null);
     try {
+      console.log(`[FactScore] Starting fact-check for articleId=${articleId}, force=${force}`);
       const response = await fetch('/api/factcheck', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -111,11 +114,23 @@ export default function FactScore({ score: initialScore, details: initialDetails
       });
       if (response.ok) {
         const data: FactCheckResult = await response.json();
-        setDetails(data);
-        if (data.score >= 0) setScore(data.score);
+        console.log(`[FactScore] Got result: score=${data.score}, claims=${data.claims?.length || 0}`);
+        if (data.score === -1 && data.summary?.includes('Fejl')) {
+          setError(data.summary);
+        } else {
+          setDetails(data);
+          if (data.score >= 0) setScore(data.score);
+        }
+      } else {
+        const errData = await response.json().catch(() => null);
+        const errMsg = errData?.error || `HTTP ${response.status}`;
+        console.error(`[FactScore] API error: ${errMsg}`);
+        setError(`Fakta-check fejlede: ${errMsg}`);
       }
-    } catch (error) {
-      console.error('Fact-check failed:', error);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Ukendt fejl';
+      console.error('[FactScore] Fact-check failed:', msg);
+      setError(`Netværksfejl: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -161,7 +176,24 @@ export default function FactScore({ score: initialScore, details: initialDetails
           </div>
         )}
 
-        {showDetails && !loading && details && (
+        {showDetails && !loading && error && (
+          <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-red-700/50 bg-zinc-900 p-4 shadow-2xl">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-red-400">⚠️ Fejl</span>
+              <button onClick={() => { setShowDetails(false); setError(null); }} className="text-zinc-500 hover:text-zinc-300 text-lg leading-none">✕</button>
+            </div>
+            <p className="text-[11px] text-red-300/80 mb-3">{error}</p>
+            <button
+              onClick={() => runFactCheck(true)}
+              disabled={loading}
+              className="w-full rounded-lg border border-accent-500/40 bg-accent-500/10 px-3 py-2 text-xs font-medium text-accent-400 hover:bg-accent-500/20"
+            >
+              🔄 Prøv igen
+            </button>
+          </div>
+        )}
+
+        {showDetails && !loading && !error && details && (
           <DetailsPopup details={details} onClose={() => setShowDetails(false)} onReCheck={() => runFactCheck(true)} loading={loading} />
         )}
       </div>
@@ -226,7 +258,24 @@ export default function FactScore({ score: initialScore, details: initialDetails
         </div>
       )}
 
-      {showDetails && !loading && details && (
+      {showDetails && !loading && error && (
+        <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-red-700/50 bg-zinc-900 p-4 shadow-2xl">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-red-400">⚠️ Fejl</span>
+            <button onClick={() => { setShowDetails(false); setError(null); }} className="text-zinc-500 hover:text-zinc-300 text-lg leading-none">✕</button>
+          </div>
+          <p className="text-[11px] text-red-300/80 mb-3">{error}</p>
+          <button
+            onClick={() => runFactCheck(true)}
+            disabled={loading}
+            className="w-full rounded-lg border border-accent-500/40 bg-accent-500/10 px-3 py-2 text-xs font-medium text-accent-400 hover:bg-accent-500/20"
+          >
+            🔄 Prøv igen
+          </button>
+        </div>
+      )}
+
+      {showDetails && !loading && !error && details && (
         <DetailsPopup details={details} onClose={() => setShowDetails(false)} onReCheck={() => runFactCheck(true)} loading={loading} />
       )}
     </div>

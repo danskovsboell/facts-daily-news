@@ -10,6 +10,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { articleId, title, content, source, force } = body;
 
+    console.log(`[factcheck API] POST received: articleId=${articleId}, force=${force}, hasTitle=${!!title}`);
+
     // If articleId provided, fetch article from Supabase
     let articleTitle = title;
     let articleContent = content;
@@ -51,9 +53,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Full detailed fact-check (uses grok-3-mini for quality)
+    // Full detailed fact-check with Grok web search
     // Pass force flag to skip cache when re-checking
+    console.log(`[factcheck API] Calling factCheck for: "${articleTitle?.slice(0, 60)}..." force=${force}`);
     const result = await factCheck(articleTitle, articleContent || '', articleSource || 'unknown', force);
+    console.log(`[factcheck API] factCheck returned: score=${result.score}, claims=${result.claims?.length}, method=${result.verificationMethod}`);
 
     // Save result back to Supabase if articleId provided
     if (articleId) {
