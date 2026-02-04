@@ -25,10 +25,16 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
     const offset = parseInt(searchParams.get('offset') || '0');
 
+    // ALWAYS only show today's articles (midnight UTC) — no bypass
+    const todayMidnight = new Date();
+    todayMidnight.setUTCHours(0, 0, 0, 0);
+    const todayMidnightISO = todayMidnight.toISOString();
+
     let query = supabase
       .from('articles')
       .select('*', { count: 'exact' })
       .eq('published', true)
+      .gte('created_at', todayMidnightISO)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 

@@ -210,14 +210,16 @@ async function generateArticle(sources: RawSource[], interestNames?: string[]): 
   const interestsList = (interestNames || DEFAULT_INTERESTS).join(', ');
 
   const now = new Date();
-  const currentMonth = now.toLocaleString('da-DK', { month: 'long', year: 'numeric' });
+  const todayISO = now.toISOString().split('T')[0]; // e.g. "2026-02-05"
+  const todayDanish = now.toLocaleDateString('da-DK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   const systemPrompt = `Du er en professionel nyhedsjournalist. Skriv en original dansk artikel baseret på følgende kilder.
 
-DATO-KONTEKST: Vi er i ${currentMonth}. Du skriver nyheder for ${currentMonth}.
-- Ignorer information der er ældre end en uge
-- Alle artikler SKAL handle om aktuelle begivenheder i ${now.getFullYear()}
-- Hvis kildematerialet primært handler om begivenheder fra ${now.getFullYear() - 1} eller tidligere, skal du IKKE skrive artiklen — returner {"skip": true} i stedet
+DATO-KONTEKST: I dag er ${todayDanish} (${todayISO}).
+- Skriv KUN om begivenheder fra i dag, ${todayISO}. Hvis kilderne primært handler om ældre nyheder (fra i går eller tidligere), returner {"skip": true}.
+- Alle artikler SKAL handle om aktuelle begivenheder fra I DAG.
+- Ignorer totalt kilder der er ældre end 24 timer.
+- Hvis kildematerialet primært handler om begivenheder fra ${now.getFullYear() - 1} eller tidligere, returner {"skip": true}
 - Brug IKKE årstallet ${now.getFullYear() - 1} i overskriften medmindre det er i kontekst af en sammenligning med nutiden
 
 LÆSERENS INTERESSEOMRÅDER: ${interestsList}
@@ -343,13 +345,30 @@ export async function GET() {
       return NextResponse.json({ error: 'GROK_API_KEY not configured' }, { status: 503 });
     }
 
-    // ── Step 1: Fetch unprocessed sources (small batch, last 48h) ──
-    const twoDaysAgoSources = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    // ── Step 0: Delete articles older than today (midnight UTC) ──
+    const todayMidnight = new Date();
+    todayMidnight.setUTCHours(0, 0, 0, 0);
+    const todayMidnightISO = todayMidnight.toISOString();
+
+    const { data: deletedArticles, error: deleteError } = await supabase
+      .from('articles')
+      .delete()
+      .lt('created_at', todayMidnightISO)
+      .select('id');
+
+    if (deleteError) {
+      console.error('Failed to delete old articles:', deleteError);
+    } else if (deletedArticles && deletedArticles.length > 0) {
+      console.log(`Deleted ${deletedArticles.length} articles older than today`);
+    }
+
+    // ── Step 1: Fetch unprocessed sources (last 24h only — today's sources) ──
+    const oneDayAgoSources = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: rawSources, error: fetchError } = await supabase
       .from('raw_sources')
       .select('*')
       .eq('processed', false)
-      .gte('fetched_at', twoDaysAgoSources)
+      .gte('fetched_at', oneDayAgoSources)
       .order('fetched_at', { ascending: false })
       .limit(MAX_SOURCES_PER_RUN);
 
@@ -365,12 +384,12 @@ export async function GET() {
       return NextResponse.json({ generated: 0, message: 'No unprocessed sources' });
     }
 
-    // ── Step 2: Load existing article titles for dedup ───────
-    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    // ── Step 2: Load existing article titles for dedup (today only) ──
+    const todayStart = todayMidnightISO; // reuse from step 0
     const { data: existingArticles } = await supabase
       .from('articles')
       .select('title')
-      .gte('created_at', twoDaysAgo);
+      .gte('created_at', todayStart);
 
     const existingTitles: string[] = (existingArticles || []).map((a: { title: string }) => a.title);
 
@@ -378,7 +397,7 @@ export async function GET() {
     const { data: existingSourceUrls } = await supabase
       .from('articles')
       .select('sources')
-      .gte('created_at', twoDaysAgo);
+      .gte('created_at', todayStart);
 
     const usedSourceUrls = new Set<string>();
     for (const article of existingSourceUrls || []) {
