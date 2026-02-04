@@ -45,6 +45,39 @@ function FactScoreBadge({ score }: { score: number }) {
   );
 }
 
+function getVerdictEmoji(verdict: string): string {
+  switch (verdict) {
+    case 'true': return '✅';
+    case 'mostly-true': return '🟢';
+    case 'mixed': return '🟡';
+    case 'mostly-false': return '🟠';
+    case 'false': return '❌';
+    default: return '❓';
+  }
+}
+
+function getVerdictLabel(verdict: string): string {
+  switch (verdict) {
+    case 'true': return 'Bekræftet';
+    case 'mostly-true': return 'Overvejende sandt';
+    case 'mixed': return 'Blandet';
+    case 'mostly-false': return 'Overvejende falsk';
+    case 'false': return 'Falsk';
+    default: return 'Ikke verificeret';
+  }
+}
+
+function getVerdictColor(verdict: string): string {
+  switch (verdict) {
+    case 'true': return 'text-green-400';
+    case 'mostly-true': return 'text-green-400';
+    case 'mixed': return 'text-yellow-400';
+    case 'mostly-false': return 'text-orange-400';
+    case 'false': return 'text-red-400';
+    default: return 'text-zinc-500';
+  }
+}
+
 /* --- Helpers for formatting article body text --- */
 
 function formatArticleBody(raw: string): string {
@@ -188,7 +221,14 @@ export default function ArticlePage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <FactScoreBadge score={article.fact_score} />
-                <span className="text-sm text-zinc-500">AI Fakta-vurdering</span>
+                <div>
+                  <span className="text-sm text-zinc-500">AI Fakta-vurdering</span>
+                  {article.fact_details?.sources_checked && article.fact_details.sources_checked.length > 0 && (
+                    <span className="ml-2 text-[11px] text-accent-400">
+                      🌐 {article.fact_details.sources_checked.length} kilder verificeret
+                    </span>
+                  )}
+                </div>
               </div>
               {article.fact_details && article.fact_details.claims?.length > 0 && (
                 <button
@@ -202,23 +242,57 @@ export default function ArticlePage() {
 
             {showFactDetails && article.fact_details && (
               <div className="mt-4 space-y-3 border-t border-zinc-800 pt-4">
+                {/* Claims */}
                 {article.fact_details.claims?.map((claim, i) => (
-                  <div key={i} className="rounded-lg bg-zinc-800/50 p-3">
+                  <div key={i} className="rounded-lg bg-zinc-800/50 border border-zinc-700/50 p-3">
                     <div className="flex items-start gap-2">
-                      <span className="mt-0.5 text-sm">
-                        {claim.verdict === 'true' ? '✅' :
-                         claim.verdict === 'mostly-true' ? '🟢' :
-                         claim.verdict === 'mixed' ? '🟡' :
-                         claim.verdict === 'mostly-false' ? '🟠' :
-                         claim.verdict === 'false' ? '❌' : '❓'}
+                      <span className="mt-0.5 text-sm shrink-0">
+                        {getVerdictEmoji(claim.verdict)}
                       </span>
-                      <div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className={`text-xs font-semibold ${getVerdictColor(claim.verdict)}`}>
+                            {getVerdictLabel(claim.verdict)}
+                          </span>
+                        </div>
                         <p className="text-sm font-medium text-zinc-300">{claim.text}</p>
                         <p className="mt-1 text-xs text-zinc-500">{claim.explanation}</p>
+                        {/* Per-claim sources */}
+                        {claim.claimSources && claim.claimSources.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {claim.claimSources.slice(0, 4).map((src, j) => (
+                              <a
+                                key={j}
+                                href={src.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 rounded-full bg-zinc-700/50 px-2 py-0.5 text-[10px] text-accent-400 hover:bg-zinc-700 hover:text-accent-300 transition-colors"
+                              >
+                                🔗 {src.domain || 'Kilde'}
+                              </a>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
                 ))}
+
+                {/* Sources checked */}
+                {article.fact_details.sources_checked && article.fact_details.sources_checked.length > 0 && (
+                  <div className="rounded-lg bg-zinc-800/30 p-3 mt-2">
+                    <h5 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mb-2">
+                      Kilder verificeret mod ({article.fact_details.sources_checked.length})
+                    </h5>
+                    <div className="flex flex-wrap gap-1.5">
+                      {article.fact_details.sources_checked.map((src, i) => (
+                        <span key={i} className="rounded-full bg-zinc-700/50 px-2 py-0.5 text-[10px] text-zinc-400">
+                          📎 {src}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

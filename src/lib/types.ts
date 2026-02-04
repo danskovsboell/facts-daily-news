@@ -25,12 +25,23 @@ export interface FactCheckResult {
   sources?: string[];
   category?: string;
   checkedAt: string;
+  // Enhanced fact-check fields
+  sourcesConsulted?: number;       // Total number of web sources checked
+  sourceLinks?: SourceLink[];      // Actual source URLs with titles
+  verificationMethod?: 'web-search' | 'ai-only'; // How the check was performed
+}
+
+export interface SourceLink {
+  url: string;
+  title?: string;
+  domain?: string;
 }
 
 export interface Claim {
   text: string;
   verdict: 'true' | 'mostly-true' | 'mixed' | 'mostly-false' | 'false' | 'unverified';
   explanation: string;
+  claimSources?: SourceLink[];  // Per-claim source links
 }
 
 export type Category = 'danmark' | 'europa' | 'verden' | 'sladder';

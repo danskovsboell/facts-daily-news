@@ -1,11 +1,13 @@
-import { FactCheckResult, Category, SubCategory, GrokCategorizationResult } from './types';
+import { FactCheckResult, Category, SubCategory, GrokCategorizationResult, SourceLink, Claim } from './types';
 
 const GROK_API_KEY = process.env.GROK_API_KEY;
 const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
+const GROK_RESPONSES_URL = 'https://api.x.ai/v1/responses';
 
 // Models
 const FAST_MODEL = 'grok-3-mini-fast'; // Hurtig + billig til kategorisering
 const QUALITY_MODEL = 'grok-3-mini';   // Bedre kvalitet til fakta-check
+const SEARCH_MODEL = 'grok-3-mini-fast'; // For web search verification
 
 // ============================================================
 // In-memory cache for fact-check results
@@ -95,7 +97,235 @@ async function callGrok(
 }
 
 // ============================================================
-// Fact-check a news article using Grok
+// Helper: Call Grok Responses API with web_search tool
+// Returns text content + all citation URLs found
+// ============================================================
+async function callGrokWithWebSearch(
+  prompt: string,
+  timeoutMs: number = 30000
+): Promise<{ text: string; citations: string[]; searchCalls: number }> {
+  if (!GROK_API_KEY) {
+    throw new Error('GROK_API_KEY not configured');
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(GROK_RESPONSES_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${GROK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: SEARCH_MODEL,
+        input: [{ role: 'user', content: prompt }],
+        tools: [{ type: 'web_search' as const }],
+        temperature: 0.2,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Grok Responses API ${response.status}: ${errText.slice(0, 500)}`);
+    }
+
+    const data = await response.json();
+
+    let textContent = '';
+    let searchCalls = 0;
+    const citations: string[] = [];
+
+    for (const item of data.output || []) {
+      if (item.type === 'web_search_call') {
+        searchCalls++;
+      }
+      if (item.type === 'message' && item.content) {
+        for (const part of item.content) {
+          if (part.type === 'output_text') {
+            textContent = part.text;
+            if (part.annotations) {
+              for (const ann of part.annotations) {
+                if (ann.url && !citations.includes(ann.url)) {
+                  citations.push(ann.url);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return { text: textContent, citations, searchCalls };
+  } catch (error) {
+    clearTimeout(timeout);
+    throw error;
+  }
+}
+
+// ============================================================
+// Helper: Extract domain from URL
+// ============================================================
+function extractDomain(url: string): string {
+  try {
+    const u = new URL(url);
+    return u.hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
+// ============================================================
+// Step 1: Extract key claims from the article
+// ============================================================
+async function extractClaims(
+  title: string,
+  content: string,
+  source: string
+): Promise<string[]> {
+  const systemPrompt = `Du er en fakta-checker. Identificér de vigtigste faktuelle påstande i denne nyhedsartikel.
+
+Returnér et JSON-objekt:
+{
+  "claims": [
+    "Specifik faktuel påstand 1",
+    "Specifik faktuel påstand 2",
+    "Specifik faktuel påstand 3"
+  ]
+}
+
+REGLER:
+- Find 3-5 specifikke, verificerbare FAKTUELLE påstande (tal, datoer, navne, begivenheder)
+- IKKE meninger, analyser eller vurderinger – kun fakta der kan tjekkes
+- Skriv hver påstand som en kort, klar sætning på dansk
+- Fokusér på de vigtigste/mest centrale påstande`;
+
+  const userMessage = `Kilde: ${source}\nOverskrift: ${title}\n\nIndhold: ${content || '(kun overskrift tilgængelig)'}`;
+
+  try {
+    const responseText = await callGrok(FAST_MODEL, systemPrompt, userMessage, 0.2, 15000);
+    const parsed = JSON.parse(responseText);
+    const claims = parsed.claims || [];
+    // Ensure we have at least 1 and at most 5 claims
+    return claims.slice(0, 5);
+  } catch (error) {
+    console.error('Claim extraction error:', error);
+    // Fallback: use the title as the single claim
+    return [title];
+  }
+}
+
+// ============================================================
+// Step 2: Verify a single claim using web search
+// ============================================================
+interface ClaimVerification {
+  claim: string;
+  verdict: 'true' | 'mostly-true' | 'mixed' | 'mostly-false' | 'false' | 'unverified';
+  explanation: string;
+  sources: SourceLink[];
+  searchCalls: number;
+}
+
+async function verifyClaim(claim: string, articleSource: string): Promise<ClaimVerification> {
+  const prompt = `You are a professional fact-checker. Verify this specific claim by searching the web for evidence:
+
+CLAIM: "${claim}"
+(Originally from: ${articleSource})
+
+Search for this claim using web search. Find real sources that confirm or deny it.
+
+After searching, respond with ONLY valid JSON (no markdown, no extra text):
+{
+  "verdict": "true|mostly-true|mixed|mostly-false|false|unverified",
+  "explanation": "Brief explanation IN DANISH of what you found, referencing specific sources",
+  "source_names": ["Name of source 1", "Name of source 2"]
+}
+
+Verdict guide:
+- "true": Multiple reliable sources confirm the claim
+- "mostly-true": Confirmed but with minor inaccuracies or missing nuances
+- "mixed": Some aspects confirmed, others not
+- "mostly-false": Core claim is inaccurate though some elements are true
+- "false": Contradicted by reliable sources
+- "unverified": Cannot find sufficient evidence either way`;
+
+  try {
+    const { text, citations, searchCalls } = await callGrokWithWebSearch(prompt, 25000);
+
+    // Parse the JSON response - strip markdown code blocks if present
+    let jsonStr = text.trim();
+    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (jsonMatch) {
+      jsonStr = jsonMatch[1].trim();
+    }
+
+    // Try to find JSON object
+    const jsonStart = jsonStr.indexOf('{');
+    const jsonEnd = jsonStr.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      jsonStr = jsonStr.slice(jsonStart, jsonEnd + 1);
+    }
+
+    const parsed = JSON.parse(jsonStr);
+
+    // Build source links from citations
+    const sourcesFromCitations: SourceLink[] = citations.map(url => ({
+      url,
+      domain: extractDomain(url),
+      title: extractDomain(url),
+    }));
+
+    const validVerdicts = ['true', 'mostly-true', 'mixed', 'mostly-false', 'false', 'unverified'];
+    const verdict = validVerdicts.includes(parsed.verdict) ? parsed.verdict : 'unverified';
+
+    return {
+      claim,
+      verdict: verdict as ClaimVerification['verdict'],
+      explanation: parsed.explanation || 'Ingen forklaring tilgængelig',
+      sources: sourcesFromCitations,
+      searchCalls,
+    };
+  } catch (error) {
+    console.error(`Claim verification error for "${claim.slice(0, 50)}...":`, error);
+    return {
+      claim,
+      verdict: 'unverified',
+      explanation: 'Kunne ikke verificere denne påstand',
+      sources: [],
+      searchCalls: 0,
+    };
+  }
+}
+
+// ============================================================
+// Step 3: Calculate overall score from individual verdicts
+// ============================================================
+function calculateOverallScore(verifications: ClaimVerification[]): number {
+  if (verifications.length === 0) return 50;
+
+  const verdictScores: Record<string, number> = {
+    'true': 100,
+    'mostly-true': 85,
+    'mixed': 55,
+    'mostly-false': 25,
+    'false': 5,
+    'unverified': 50,
+  };
+
+  const total = verifications.reduce((sum, v) => {
+    return sum + (verdictScores[v.verdict] || 50);
+  }, 0);
+
+  return Math.round(total / verifications.length);
+}
+
+// ============================================================
+// Fact-check a news article using Grok with web search
+// Multi-step: Extract claims → Verify each with web search → Aggregate
 // ============================================================
 export async function factCheck(
   title: string,
@@ -116,70 +346,162 @@ export async function factCheck(
       claims: [],
       sources: [],
       checkedAt: new Date().toISOString(),
+      verificationMethod: 'ai-only',
     };
   }
 
   try {
-    const systemPrompt = `Du er en erfaren fakta-checker og journalist. Analysér følgende nyhedsartikel og vurder dens troværdighed.
+    console.log(`🔍 Starting deep fact-check for: "${title.slice(0, 60)}..."`);
 
-Du SKAL returnere et JSON-objekt med PRÆCIS dette format:
-{
-  "score": <number 0-100, troværdighedsscore>,
-  "summary": "<kort dansk opsummering af din vurdering, 1-2 sætninger>",
-  "category": "<en af: Generelt, Finans & Business, Sludder & Sladder>",
-  "claims": [
-    {
-      "text": "<den specifikke påstand>",
-      "verdict": "<true|mostly-true|mixed|mostly-false|false|unverified>",
-      "explanation": "<kort forklaring på dansk>"
+    // Step 1: Extract key claims from the article
+    const extractedClaims = await extractClaims(title, content, source);
+    console.log(`📋 Extracted ${extractedClaims.length} claims to verify`);
+
+    // Step 2: Verify each claim in parallel using web search
+    const verifications = await Promise.all(
+      extractedClaims.map(claim => verifyClaim(claim, source))
+    );
+
+    // Step 3: Collect all unique sources
+    const allSourceLinks: SourceLink[] = [];
+    const seenUrls = new Set<string>();
+    let totalSearchCalls = 0;
+
+    for (const v of verifications) {
+      totalSearchCalls += v.searchCalls;
+      for (const src of v.sources) {
+        if (!seenUrls.has(src.url)) {
+          seenUrls.add(src.url);
+          allSourceLinks.push(src);
+        }
+      }
     }
-  ],
-  "sources": ["<kilde 1>", "<kilde 2>"]
-}
 
-Scoring-guide:
-- 85-100: Veldokumenteret, fra troværdig kilde, faktuelle påstande verificerbare
-- 70-84: Generelt korrekt, men mangler nuancer eller kilder
-- 50-69: Blandet - indeholder både korrekte og tvivlsomme påstande
-- 30-49: Vildledende eller ensidigt vinklet
-- 0-29: Misinformation eller stærkt fejlagtigt
+    // Step 4: Calculate overall score
+    const overallScore = calculateOverallScore(verifications);
 
-Vær fair men kritisk. Danske medier som DR, TV2, Berlingske, Politiken er generelt troværdige.
-Giv altid mindst 1-2 claims.
-Kilder skal være rigtige referencer (nyhedsmedier, officielle organer osv).`;
+    // Step 5: Generate summary
+    const confirmedCount = verifications.filter(v =>
+      v.verdict === 'true' || v.verdict === 'mostly-true'
+    ).length;
+    const mixedCount = verifications.filter(v => v.verdict === 'mixed').length;
+    const falseCount = verifications.filter(v =>
+      v.verdict === 'false' || v.verdict === 'mostly-false'
+    ).length;
+    const unverifiedCount = verifications.filter(v => v.verdict === 'unverified').length;
 
-    const userMessage = `Kilde: ${source}\nOverskrift: ${title}\n\nIndhold: ${content || '(kun overskrift tilgængelig)'}`;
+    let summary = '';
+    if (falseCount > 0) {
+      summary = `${falseCount} af ${verifications.length} påstande er fundet fejlagtige eller misvisende. `;
+    }
+    if (confirmedCount > 0) {
+      summary += `${confirmedCount} påstand${confirmedCount > 1 ? 'e' : ''} bekræftet via websøgning. `;
+    }
+    if (mixedCount > 0) {
+      summary += `${mixedCount} påstand${mixedCount > 1 ? 'e' : ''} er delvist korrekt${mixedCount > 1 ? 'e' : ''}. `;
+    }
+    if (unverifiedCount > 0) {
+      summary += `${unverifiedCount} kunne ikke verificeres. `;
+    }
+    summary += `Verificeret mod ${allSourceLinks.length} kilder via websøgning.`;
 
-    const responseText = await callGrok(QUALITY_MODEL, systemPrompt, userMessage, 0.3, 30000);
-    const result = JSON.parse(responseText);
+    // Build claims with per-claim sources
+    const claims: Claim[] = verifications.map(v => ({
+      text: v.claim,
+      verdict: v.verdict,
+      explanation: v.explanation,
+      claimSources: v.sources,
+    }));
+
+    // Source names for backward compatibility
+    const sourceNames = [...new Set(allSourceLinks.map(s => s.domain || extractDomain(s.url)))];
 
     const factResult: FactCheckResult = {
-      score: Math.min(100, Math.max(0, Number(result.score) || 50)),
-      summary: result.summary || 'Ingen vurdering tilgængelig',
-      claims: Array.isArray(result.claims) ? result.claims.map((c: { text?: string; verdict?: string; explanation?: string }) => ({
-        text: c.text || '',
-        verdict: ['true', 'mostly-true', 'mixed', 'mostly-false', 'false', 'unverified'].includes(c.verdict || '')
-          ? c.verdict
-          : 'unverified',
-        explanation: c.explanation || '',
-      })) : [],
-      sources: Array.isArray(result.sources) ? result.sources : [],
-      category: result.category || 'Generelt',
+      score: overallScore,
+      summary,
+      claims,
+      sources: sourceNames,
+      sourceLinks: allSourceLinks,
+      sourcesConsulted: allSourceLinks.length,
+      category: 'Generelt',
       checkedAt: new Date().toISOString(),
+      verificationMethod: 'web-search',
     };
+
+    console.log(`✅ Fact-check complete: score=${overallScore}, claims=${claims.length}, sources=${allSourceLinks.length}, searches=${totalSearchCalls}`);
 
     // Cache the result
     setCache(factCheckCache, cacheKey, factResult);
 
     return factResult;
   } catch (error) {
-    console.error('Grok fact-check error:', error);
+    console.error('Grok deep fact-check error:', error);
+
+    // Fallback to simple AI-only check
+    console.log('⚠️ Falling back to AI-only fact-check...');
+    return factCheckFallback(title, content, source);
+  }
+}
+
+// ============================================================
+// Fallback: Simple AI-only fact-check (no web search)
+// Used when the deep check fails
+// ============================================================
+async function factCheckFallback(
+  title: string,
+  content: string,
+  source: string
+): Promise<FactCheckResult> {
+  try {
+    const systemPrompt = `Du er en erfaren fakta-checker. Analysér denne nyhedsartikel og vurder dens troværdighed.
+
+Returnér JSON:
+{
+  "score": <0-100>,
+  "summary": "<kort vurdering på dansk>",
+  "claims": [
+    {"text": "<påstand>", "verdict": "<true|mostly-true|mixed|mostly-false|false|unverified>", "explanation": "<forklaring>"}
+  ]
+}
+
+Score-guide:
+- 85-100: Troværdig kilde, verificerbare fakta
+- 70-84: Generelt korrekt, mangler nuancer
+- 50-69: Blandet troværdighed
+- 30-49: Vildledende
+- 0-29: Misinformation
+
+BEMÆRK: Dette er en AI-vurdering UDEN websøgning. Vær konservativ med din score.`;
+
+    const userMessage = `Kilde: ${source}\nOverskrift: ${title}\n\nIndhold: ${content || '(kun overskrift)'}`;
+    const responseText = await callGrok(QUALITY_MODEL, systemPrompt, userMessage, 0.3, 20000);
+    const result = JSON.parse(responseText);
+
+    return {
+      score: Math.min(100, Math.max(0, Number(result.score) || 50)),
+      summary: (result.summary || 'AI-vurdering uden websøgning') + ' (Bemærk: verificeret uden websøgning)',
+      claims: Array.isArray(result.claims) ? result.claims.map((c: { text?: string; verdict?: string; explanation?: string }) => ({
+        text: c.text || '',
+        verdict: ['true', 'mostly-true', 'mixed', 'mostly-false', 'false', 'unverified'].includes(c.verdict || '')
+          ? c.verdict as Claim['verdict']
+          : 'unverified',
+        explanation: c.explanation || '',
+      })) : [],
+      sources: [],
+      sourcesConsulted: 0,
+      sourceLinks: [],
+      checkedAt: new Date().toISOString(),
+      verificationMethod: 'ai-only',
+    };
+  } catch (error) {
+    console.error('Fallback fact-check also failed:', error);
     return {
       score: -1,
       summary: `Fejl ved fakta-check: ${error instanceof Error ? error.message : 'ukendt fejl'}`,
       claims: [],
       sources: [],
       checkedAt: new Date().toISOString(),
+      verificationMethod: 'ai-only',
     };
   }
 }
