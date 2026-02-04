@@ -89,6 +89,7 @@ export async function GET() {
       duration_ms: discovery.totalDurationMs,
       categorized: categorizations ? Math.min(discovery.stories.length, categorizations.length) : 0,
       errors: discovery.errors.length > 0 ? discovery.errors : undefined,
+      interest_source: discovery.interestSource,
       breakdown: discovery.results.map(r => ({
         query: r.query,
         stories: r.stories.length,
