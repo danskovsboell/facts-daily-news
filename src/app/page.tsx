@@ -1,21 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import TabNavigation from '@/components/TabNavigation';
 import ArticleCard from '@/components/ArticleCard';
+import InterestFilter from '@/components/InterestFilter';
 import MyNewsView from '@/components/MyNewsView';
 import { useArticles } from '@/hooks/useArticles';
+import { articleMatchesTag } from '@/lib/interest-utils';
 import { Category, SubCategory, TabId } from '@/lib/types';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>('dine-nyheder');
   const [activeSubTab, setActiveSubTab] = useState<SubCategory>('generelt');
+  const [filterTag, setFilterTag] = useState<string | null>(null);
 
   const isMyNews = activeTab === 'dine-nyheder';
 
   // Only use Supabase articles — no RSS fallback
   const {
-    articles,
+    articles: rawArticles,
     loading,
     error,
     refresh: refreshArticles,
@@ -27,9 +30,15 @@ export default function Home() {
     category: isMyNews ? undefined : (activeTab as Category),
     subCategory:
       !isMyNews && activeTab !== 'sladder' ? activeSubTab : undefined,
-    autoRefresh: !isMyNews, // MyNewsView has its own refresh
+    autoRefresh: !isMyNews,
     refreshInterval: 300000,
   });
+
+  // Apply tag filter on regular tabs
+  const articles = useMemo(() => {
+    if (!filterTag || isMyNews) return rawArticles;
+    return rawArticles.filter((a) => articleMatchesTag(a, filterTag));
+  }, [rawArticles, filterTag, isMyNews]);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
@@ -40,8 +49,12 @@ export default function Home() {
         onTabChange={(tab) => {
           setActiveTab(tab);
           setActiveSubTab('generelt');
+          setFilterTag(null); // reset filter on tab switch
         }}
-        onSubTabChange={setActiveSubTab}
+        onSubTabChange={(sub) => {
+          setActiveSubTab(sub);
+          setFilterTag(null); // reset filter on sub-tab switch
+        }}
       />
 
       {/* "Dine Nyheder" tab — separate component */}
@@ -50,11 +63,18 @@ export default function Home() {
       {/* Regular category tabs */}
       {!isMyNews && (
         <>
+          {/* Interest tag filter */}
+          <InterestFilter activeTag={filterTag} onTagChange={setFilterTag} />
+
           {/* Status bar */}
-          <div className="mt-4 flex items-center justify-between">
+          <div className="mt-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-xs text-zinc-600">
-                {loading ? 'Henter artikler...' : `${count} artikler`}
+                {loading
+                  ? 'Henter artikler...'
+                  : filterTag
+                    ? `${articles.length} af ${count} artikler (filtreret)`
+                    : `${count} artikler`}
               </span>
               {lastUpdated && (
                 <span className="text-[10px] text-zinc-700">
@@ -110,10 +130,25 @@ export default function Home() {
           {/* Empty state */}
           {!loading && articles.length === 0 && !error && (
             <div className="mt-12 text-center">
-              <p className="text-lg text-zinc-500">📰 Ingen artikler endnu</p>
-              <p className="mt-2 text-sm text-zinc-600">
-                Nye artikler genereres automatisk. Tjek igen om lidt.
-              </p>
+              {filterTag ? (
+                <>
+                  <p className="text-lg text-zinc-500">
+                    🔍 Ingen artikler med #{filterTag}
+                  </p>
+                  <p className="mt-2 text-sm text-zinc-600">
+                    Prøv at fjerne filteret for at se alle artikler.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-lg text-zinc-500">
+                    📰 Ingen artikler endnu
+                  </p>
+                  <p className="mt-2 text-sm text-zinc-600">
+                    Nye artikler genereres automatisk. Tjek igen om lidt.
+                  </p>
+                </>
+              )}
             </div>
           )}
 
@@ -123,7 +158,7 @@ export default function Home() {
               {articles.map((article) => (
                 <ArticleCard key={article.id} article={article} />
               ))}
-              {hasMore && (
+              {hasMore && !filterTag && (
                 <button
                   onClick={loadMore}
                   className="w-full rounded-xl border border-zinc-800 bg-zinc-900/30 py-3 text-sm text-zinc-500 transition-all hover:border-zinc-700 hover:bg-zinc-900 hover:text-zinc-300"

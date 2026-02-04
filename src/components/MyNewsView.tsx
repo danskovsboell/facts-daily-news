@@ -5,23 +5,12 @@ import Link from 'next/link';
 import { useArticles } from '@/hooks/useArticles';
 import { Article, Category } from '@/lib/types';
 import { DEFAULT_INTERESTS } from '@/lib/constants';
+import {
+  articleMatchesTag,
+  articleMatchesAnyInterest,
+} from '@/lib/interest-utils';
 import ArticleCard from './ArticleCard';
-
-/** Check if an article has any interest_tags that match user interests */
-function hasMatchingInterest(article: Article, interests: string[]): boolean {
-  const tags = (article.interest_tags || []).map((t) => t.toLowerCase());
-  if (tags.length === 0) return false;
-
-  return interests.some((interest) => {
-    const interestLower = interest.toLowerCase();
-    return tags.some(
-      (tag) =>
-        tag === interestLower ||
-        tag.includes(interestLower) ||
-        interestLower.includes(tag)
-    );
-  });
-}
+import InterestFilter from './InterestFilter';
 
 const SECTIONS: { category: Category; label: string; emoji: string }[] = [
   { category: 'danmark', label: 'Danmark', emoji: '🇩🇰' },
@@ -31,6 +20,7 @@ const SECTIONS: { category: Category; label: string; emoji: string }[] = [
 
 export default function MyNewsView() {
   const [interests, setInterests] = useState<string[]>(DEFAULT_INTERESTS);
+  const [filterTag, setFilterTag] = useState<string | null>(null);
 
   const {
     articles,
@@ -58,21 +48,28 @@ export default function MyNewsView() {
     }
   }, []);
 
-  // Filter to interest-matching articles and group by region
+  // Filter to interest-matching articles, then apply tag filter, then group by region
   const grouped = useMemo(() => {
-    const interestArticles = articles.filter((a) =>
-      hasMatchingInterest(a, interests)
+    // First: only articles matching user's interests
+    let filtered = articles.filter((a) =>
+      articleMatchesAnyInterest(a, interests)
     );
+
+    // Second: if a specific tag filter is active, narrow further
+    if (filterTag) {
+      filtered = filtered.filter((a) => articleMatchesTag(a, filterTag));
+    }
+
     const byDate = (a: Article, b: Article) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
 
     return SECTIONS.map((section) => ({
       ...section,
-      articles: interestArticles
+      articles: filtered
         .filter((a) => a.category === section.category)
         .sort(byDate),
     }));
-  }, [articles, interests]);
+  }, [articles, interests, filterTag]);
 
   const totalMatching = grouped.reduce(
     (sum, s) => sum + s.articles.length,
@@ -81,32 +78,31 @@ export default function MyNewsView() {
 
   return (
     <div>
-      {/* Interest tags display */}
-      <div className="mt-4 flex flex-wrap items-center gap-1.5">
-        <span className="text-xs text-zinc-600">Dine interesser:</span>
-        {interests.map((interest) => (
-          <span
-            key={interest}
-            className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-400"
-          >
-            {interest}
-          </span>
-        ))}
+      {/* Interest tag filter */}
+      <InterestFilter activeTag={filterTag} onTagChange={setFilterTag} />
+
+      {/* Interests info + settings link */}
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className="text-[10px] text-zinc-700">
+          Viser nyheder baseret på dine interesser ·
+        </span>
         <Link
           href="/settings"
-          className="ml-1 text-[10px] text-zinc-600 hover:text-zinc-400"
+          className="text-[10px] text-zinc-600 hover:text-zinc-400"
         >
-          Rediger →
+          Rediger interesser →
         </Link>
       </div>
 
       {/* Status bar */}
-      <div className="mt-3 flex items-center justify-between">
+      <div className="mt-2 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-xs text-zinc-600">
             {loading
               ? 'Henter artikler...'
-              : `${totalMatching} artikler matcher dine interesser`}
+              : filterTag
+                ? `${totalMatching} artikler med #${filterTag}`
+                : `${totalMatching} artikler matcher dine interesser`}
           </span>
           {lastUpdated && (
             <span className="text-[10px] text-zinc-700">
@@ -159,19 +155,32 @@ export default function MyNewsView() {
       {/* Empty state */}
       {!loading && totalMatching === 0 && !error && (
         <div className="mt-12 text-center">
-          <p className="text-lg text-zinc-500">
-            ⭐ Ingen nyheder matcher dine interesser endnu
-          </p>
-          <p className="mt-2 text-sm text-zinc-600">
-            Tjek dine interesser under{' '}
-            <Link
-              href="/settings"
-              className="text-blue-500 hover:text-blue-400"
-            >
-              ⚙️ Indstillinger
-            </Link>
-            , eller vent på nye artikler.
-          </p>
+          {filterTag ? (
+            <>
+              <p className="text-lg text-zinc-500">
+                🔍 Ingen nyheder med #{filterTag}
+              </p>
+              <p className="mt-2 text-sm text-zinc-600">
+                Prøv at fjerne filteret for at se alle dine interesser.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-lg text-zinc-500">
+                ⭐ Ingen nyheder matcher dine interesser endnu
+              </p>
+              <p className="mt-2 text-sm text-zinc-600">
+                Tjek dine interesser under{' '}
+                <Link
+                  href="/settings"
+                  className="text-blue-500 hover:text-blue-400"
+                >
+                  ⚙️ Indstillinger
+                </Link>
+                , eller vent på nye artikler.
+              </p>
+            </>
+          )}
         </div>
       )}
 
