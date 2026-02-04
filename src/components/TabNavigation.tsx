@@ -1,12 +1,12 @@
 'use client';
 
 import { TABS, SUB_TABS } from '@/lib/constants';
-import { Category, SubCategory } from '@/lib/types';
+import { TabId, SubCategory } from '@/lib/types';
 
 interface TabNavigationProps {
-  activeTab: Category;
+  activeTab: TabId;
   activeSubTab: SubCategory;
-  onTabChange: (tab: Category) => void;
+  onTabChange: (tab: TabId) => void;
   onSubTabChange: (subTab: SubCategory) => void;
 }
 
@@ -36,7 +36,7 @@ export default function TabNavigation({
       </div>
 
       {/* Sub-tabs */}
-      {activeTab !== 'sladder' && (
+      {activeTab !== 'sladder' && activeTab !== 'dine-nyheder' && (
         <div className="flex gap-1 px-1">
           {SUB_TABS.map((subTab) => (
             <button
@@ -44,7 +44,7 @@ export default function TabNavigation({
               onClick={() => onSubTabChange(subTab.id)}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
                 activeSubTab === subTab.id
-                  ? 'bg-zinc-700 text-white'
+                  ? 'bg-zinc-700 text-zinc-200'
                   : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >

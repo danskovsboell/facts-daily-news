@@ -12,7 +12,7 @@ export default function Header() {
             F
           </div>
           <div>
-            <h1 className="text-lg font-bold leading-tight text-white">
+            <h1 className="text-lg font-bold leading-tight text-zinc-200">
               {APP_NAME}
             </h1>
             <p className="text-[11px] leading-tight text-zinc-500">
@@ -23,7 +23,7 @@ export default function Header() {
         <nav className="flex items-center gap-2">
           <Link
             href="/settings"
-            className="rounded-lg px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+            className="rounded-lg px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
           >
             ⚙️ Indstillinger
           </Link>

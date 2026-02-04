@@ -135,7 +135,7 @@ export default function ArticlePage() {
           <span className="text-xs text-zinc-600">{timeAgo(article.created_at)}</span>
         </div>
 
-        <h1 className="mb-4 text-2xl font-bold leading-tight text-zinc-100 md:text-3xl">
+        <h1 className="mb-4 text-2xl font-bold leading-tight text-zinc-200 md:text-3xl">
           {article.title}
         </h1>
 

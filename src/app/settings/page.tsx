@@ -79,7 +79,7 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
-      <h1 className="text-2xl font-bold text-white">⚙️ Indstillinger</h1>
+      <h1 className="text-2xl font-bold text-zinc-200">⚙️ Indstillinger</h1>
       <p className="mt-2 text-sm text-zinc-500">
         Tilpas dit nyhedsfeed efter dine interesser
       </p>

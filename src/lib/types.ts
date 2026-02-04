@@ -34,6 +34,7 @@ export interface Claim {
 }
 
 export type Category = 'danmark' | 'europa' | 'verden' | 'sladder';
+export type TabId = 'dine-nyheder' | Category;
 export type SubCategory = 'generelt' | 'finans';
 
 export interface UserSettings {
@@ -43,7 +44,7 @@ export interface UserSettings {
 }
 
 export interface TabItem {
-  id: Category;
+  id: TabId;
   label: string;
   icon?: string;
 }
