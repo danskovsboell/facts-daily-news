@@ -16,11 +16,11 @@
   "crons": [
     {
       "path": "/api/sources/fetch",
-      "schedule": "0 */4 * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/articles/generate",
-      "schedule": "0 */6 * * *"
+      "schedule": "0 7 * * *"
     }
   ]
 }
