@@ -3,18 +3,22 @@
 import { DEFAULT_INTERESTS } from '@/lib/constants';
 
 interface InterestFilterProps {
+  interests?: string[];
   activeTag: string | null;
   onTagChange: (tag: string | null) => void;
 }
 
 export default function InterestFilter({
+  interests,
   activeTag,
   onTagChange,
 }: InterestFilterProps) {
+  const tags = interests ?? DEFAULT_INTERESTS;
+
   return (
     <div className="mt-3 flex flex-wrap items-center gap-1.5">
       <span className="mr-0.5 text-[11px] text-zinc-600">Filtrer:</span>
-      {DEFAULT_INTERESTS.map((tag) => {
+      {tags.map((tag) => {
         const isActive = activeTag === tag;
         return (
           <button

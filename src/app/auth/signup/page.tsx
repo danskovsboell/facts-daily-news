@@ -35,8 +35,8 @@ export default function SignupPage() {
           setError(error.message);
         }
       } else {
-        // Instant signup - no email verification needed
-        router.push('/');
+        // Redirect to onboarding after signup
+        router.push('/onboarding');
         router.refresh();
       }
     } catch {

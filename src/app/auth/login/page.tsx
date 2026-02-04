@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/components/AuthProvider';
+import { createSupabaseBrowserClient } from '@/lib/supabase-client';
 import { APP_NAME } from '@/lib/constants';
 
 export default function LoginPage() {
@@ -28,6 +29,25 @@ export default function LoginPage() {
           setError(error.message);
         }
       } else {
+        // Check if onboarding is completed
+        try {
+          const supabase = createSupabaseBrowserClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: profile } = await supabase
+              .from('user_profiles')
+              .select('onboarding_completed')
+              .eq('id', user.id)
+              .single();
+            if (profile && !profile.onboarding_completed) {
+              router.push('/onboarding');
+              router.refresh();
+              return;
+            }
+          }
+        } catch {
+          // Proceed to home on error
+        }
         router.push('/');
         router.refresh();
       }

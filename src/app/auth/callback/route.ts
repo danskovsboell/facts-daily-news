@@ -7,7 +7,9 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get('next') ?? '/';
 
   if (code) {
-    const response = NextResponse.redirect(`${origin}${next}`);
+    // Default redirect - will be overridden if onboarding needed
+    let redirectUrl = `${origin}${next}`;
+    const response = NextResponse.redirect(redirectUrl);
     
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,6 +30,19 @@ export async function GET(request: NextRequest) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      // Check if user needs onboarding
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('onboarding_completed')
+          .eq('id', user.id)
+          .single();
+
+        if (profile && !profile.onboarding_completed) {
+          return NextResponse.redirect(`${origin}/onboarding`);
+        }
+      }
       return response;
     }
   }

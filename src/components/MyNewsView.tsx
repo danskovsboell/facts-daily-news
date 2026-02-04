@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useArticles } from '@/hooks/useArticles';
+import { useUserInterests } from '@/hooks/useUserInterests';
 import { Article, Category } from '@/lib/types';
-import { DEFAULT_INTERESTS } from '@/lib/constants';
 import {
   articleMatchesTag,
   articleMatchesAnyInterest,
@@ -19,7 +19,7 @@ const SECTIONS: { category: Category; label: string; emoji: string }[] = [
 ];
 
 export default function MyNewsView() {
-  const [interests, setInterests] = useState<string[]>(DEFAULT_INTERESTS);
+  const { userInterestNames, loading: interestsLoading } = useUserInterests();
   const [filterTag, setFilterTag] = useState<string | null>(null);
 
   const {
@@ -35,24 +35,11 @@ export default function MyNewsView() {
     refreshInterval: 300000,
   });
 
-  // Load user interests from localStorage
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('fdn-interests');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) setInterests(parsed);
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
-
   // Filter to interest-matching articles, then apply tag filter, then group by region
   const grouped = useMemo(() => {
     // First: only articles matching user's interests
     let filtered = articles.filter((a) =>
-      articleMatchesAnyInterest(a, interests)
+      articleMatchesAnyInterest(a, userInterestNames)
     );
 
     // Second: if a specific tag filter is active, narrow further
@@ -69,7 +56,7 @@ export default function MyNewsView() {
         .filter((a) => a.category === section.category)
         .sort(byDate),
     }));
-  }, [articles, interests, filterTag]);
+  }, [articles, userInterestNames, filterTag]);
 
   const totalMatching = grouped.reduce(
     (sum, s) => sum + s.articles.length,
@@ -78,8 +65,12 @@ export default function MyNewsView() {
 
   return (
     <div>
-      {/* Interest tag filter */}
-      <InterestFilter activeTag={filterTag} onTagChange={setFilterTag} />
+      {/* Interest tag filter - shows user's actual interests */}
+      <InterestFilter
+        interests={userInterestNames}
+        activeTag={filterTag}
+        onTagChange={setFilterTag}
+      />
 
       {/* Interests info + settings link */}
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -98,7 +89,7 @@ export default function MyNewsView() {
       <div className="mt-2 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-xs text-zinc-600">
-            {loading
+            {loading || interestsLoading
               ? 'Henter artikler...'
               : filterTag
                 ? `${totalMatching} artikler med #${filterTag}`
@@ -133,7 +124,7 @@ export default function MyNewsView() {
       )}
 
       {/* Loading */}
-      {loading && articles.length === 0 && (
+      {(loading || interestsLoading) && articles.length === 0 && (
         <div className="mt-8 space-y-4">
           {[...Array(5)].map((_, i) => (
             <div
@@ -153,7 +144,7 @@ export default function MyNewsView() {
       )}
 
       {/* Empty state */}
-      {!loading && totalMatching === 0 && !error && (
+      {!loading && !interestsLoading && totalMatching === 0 && !error && (
         <div className="mt-12 text-center">
           {filterTag ? (
             <>
@@ -185,7 +176,7 @@ export default function MyNewsView() {
       )}
 
       {/* Grouped sections */}
-      {!loading && totalMatching > 0 && (
+      {!loading && !interestsLoading && totalMatching > 0 && (
         <div className="mt-4 space-y-8">
           {grouped.map((section) => {
             if (section.articles.length === 0) return null;

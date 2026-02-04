@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import InterestTags from '@/components/InterestTags';
-import { ALL_INTERESTS, DEFAULT_INTERESTS } from '@/lib/constants';
+import { useState, useEffect, useMemo } from 'react';
+import { useAuth } from '@/components/AuthProvider';
+import { useUserInterests } from '@/hooks/useUserInterests';
 
 type ApiStatus = 'active' | 'pending' | 'error' | 'loading';
 
@@ -12,26 +12,36 @@ interface ApiStatuses {
   supabase: ApiStatus;
 }
 
+const MAX_CUSTOM_INTERESTS = 10;
+
 export default function SettingsPage() {
-  const [interests, setInterests] = useState<string[]>(DEFAULT_INTERESTS);
+  const { user } = useAuth();
+  const {
+    allInterests,
+    userInterestIds,
+    loading: interestsLoading,
+    saveInterests,
+    addCustomInterest,
+    fetchAllInterests,
+  } = useUserInterests();
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [customInput, setCustomInput] = useState('');
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [apiStatuses, setApiStatuses] = useState<ApiStatuses>({
     grok: 'loading',
     grok_search: 'loading',
     supabase: 'loading',
   });
 
+  // Sync selected interests from DB
   useEffect(() => {
-    // Load from localStorage
-    const stored = localStorage.getItem('fdn-interests');
-    if (stored) {
-      try {
-        setInterests(JSON.parse(stored));
-      } catch {
-        // ignore
-      }
+    if (!interestsLoading) {
+      setSelectedIds(new Set(userInterestIds));
     }
-  }, []);
+  }, [userInterestIds, interestsLoading]);
 
   // Fetch API status from server-side route
   useEffect(() => {
@@ -56,25 +66,78 @@ export default function SettingsPage() {
     fetchStatus();
   }, []);
 
-  const handleToggle = (interest: string) => {
-    setInterests((prev) =>
-      prev.includes(interest)
-        ? prev.filter((i) => i !== interest)
-        : [...prev, interest]
-    );
+  const predefinedInterests = useMemo(
+    () => allInterests.filter((i) => i.is_predefined),
+    [allInterests]
+  );
+
+  const customInterests = useMemo(
+    () => allInterests.filter((i) => !i.is_predefined && selectedIds.has(i.id)),
+    [allInterests, selectedIds]
+  );
+
+  const customCount = useMemo(
+    () => allInterests.filter((i) => !i.is_predefined && selectedIds.has(i.id)).length,
+    [allInterests, selectedIds]
+  );
+
+  const toggleInterest = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
     setSaved(false);
+    setError(null);
   };
 
-  const handleSave = () => {
-    localStorage.setItem('fdn-interests', JSON.stringify(interests));
+  const handleAddCustom = async () => {
+    const name = customInput.trim();
+    if (!name) return;
+
+    if (customCount >= MAX_CUSTOM_INTERESTS) {
+      setError(`Du kan højst tilføje ${MAX_CUSTOM_INTERESTS} egne interesser`);
+      return;
+    }
+
+    const { id, error: addError } = await addCustomInterest(name);
+    if (addError) {
+      setError(addError);
+      return;
+    }
+
+    if (id) {
+      setSelectedIds((prev) => new Set(prev).add(id));
+    }
+
+    setCustomInput('');
+    setSaved(false);
+    setError(null);
+  };
+
+  const handleSave = async () => {
+    if (selectedIds.size < 1) {
+      setError('Vælg mindst 1 interesse');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    const { error: saveError } = await saveInterests(Array.from(selectedIds));
+    if (saveError) {
+      setError(saveError);
+      setSaving(false);
+      return;
+    }
+
+    setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
-  };
-
-  const handleReset = () => {
-    setInterests(DEFAULT_INTERESTS);
-    localStorage.setItem('fdn-interests', JSON.stringify(DEFAULT_INTERESTS));
-    setSaved(false);
   };
 
   return (
@@ -94,28 +157,110 @@ export default function SettingsPage() {
           efter dine valg.
         </p>
 
-        <div className="mt-4">
-          <InterestTags
-            interests={ALL_INTERESTS}
-            selected={interests}
-            onToggle={handleToggle}
-          />
-        </div>
+        {interestsLoading ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {[...Array(8)].map((_, i) => (
+              <div
+                key={i}
+                className="h-9 w-24 animate-pulse rounded-full bg-zinc-800"
+              />
+            ))}
+          </div>
+        ) : (
+          <>
+            {/* Error message */}
+            {error && (
+              <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                {error}
+              </div>
+            )}
 
-        <div className="mt-6 flex items-center gap-3">
-          <button
-            onClick={handleSave}
-            className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-500"
-          >
-            {saved ? '✓ Gemt!' : 'Gem ændringer'}
-          </button>
-          <button
-            onClick={handleReset}
-            className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-300"
-          >
-            Nulstil til standard
-          </button>
-        </div>
+            {/* Predefined interests */}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {predefinedInterests.map((interest) => {
+                const isSelected = selectedIds.has(interest.id);
+                return (
+                  <button
+                    key={interest.id}
+                    onClick={() => toggleInterest(interest.id)}
+                    className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
+                      isSelected
+                        ? 'border-accent-500/50 bg-accent-600/20 text-accent-400 hover:bg-accent-600/30'
+                        : 'border-zinc-700 bg-zinc-800/50 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
+                    }`}
+                  >
+                    {isSelected && <span className="mr-1">✓</span>}
+                    {interest.name}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Custom interests section */}
+            {user && (
+              <div className="mt-6">
+                <h3 className="mb-2 text-sm font-medium text-zinc-400">
+                  Egne interesser
+                  <span className="ml-2 text-xs text-zinc-600">
+                    ({customCount}/{MAX_CUSTOM_INTERESTS})
+                  </span>
+                </h3>
+
+                {/* Added custom interests */}
+                {customInterests.length > 0 && (
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {customInterests.map((interest) => (
+                      <span
+                        key={interest.id}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-accent-500/50 bg-accent-600/20 px-3 py-1.5 text-sm text-accent-400"
+                      >
+                        {interest.name}
+                        <button
+                          onClick={() => toggleInterest(interest.id)}
+                          className="ml-0.5 text-accent-500/60 transition-colors hover:text-accent-300"
+                          title="Fjern interesse"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add new custom interest */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customInput}
+                    onChange={(e) => setCustomInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
+                    placeholder="Tilføj egen interesse..."
+                    maxLength={50}
+                    className="flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-[#c5c5c5] placeholder-zinc-600 outline-none transition-colors focus:border-accent-600 focus:ring-1 focus:ring-accent-600"
+                  />
+                  <button
+                    onClick={handleAddCustom}
+                    disabled={!customInput.trim() || customCount >= MAX_CUSTOM_INTERESTS}
+                    className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    + Tilføj
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Save / Reset */}
+            <div className="mt-6 flex items-center gap-3">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-500 disabled:opacity-50"
+              >
+                {saving ? 'Gemmer...' : saved ? '✓ Gemt!' : 'Gem ændringer'}
+              </button>
+            </div>
+          </>
+        )}
       </section>
 
       {/* About section */}

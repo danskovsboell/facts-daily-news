@@ -48,6 +48,9 @@ export async function middleware(request: NextRequest) {
   // Static assets and Next.js internals
   const isStaticRoute = pathname.startsWith('/_next/') || pathname.startsWith('/favicon');
 
+  // Onboarding route
+  const isOnboardingRoute = pathname === '/onboarding';
+
   if (isStaticRoute || isApiRoute) {
     return response;
   }
@@ -64,6 +67,46 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     return NextResponse.redirect(url);
+  }
+
+  // Check onboarding status for logged-in users
+  if (user && !isOnboardingRoute) {
+    try {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('onboarding_completed')
+        .eq('id', user.id)
+        .single();
+
+      // If profile exists and onboarding not completed, redirect to onboarding
+      if (profile && profile.onboarding_completed === false) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/onboarding';
+        return NextResponse.redirect(url);
+      }
+    } catch {
+      // If profile doesn't exist or error, continue normally
+      // The onboarding page itself will handle edge cases
+    }
+  }
+
+  // If user has completed onboarding and tries to access /onboarding, redirect home
+  if (user && isOnboardingRoute) {
+    try {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('onboarding_completed')
+        .eq('id', user.id)
+        .single();
+
+      if (profile && profile.onboarding_completed === true) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/';
+        return NextResponse.redirect(url);
+      }
+    } catch {
+      // Continue to onboarding page
+    }
   }
 
   return response;
