@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchAllFeeds } from '@/lib/rss';
 import { fetchAllNewsAPI } from '@/lib/newsapi';
+import { fetchMediastackDK } from '@/lib/mediastack';
 import { batchCategorize } from '@/lib/grok';
 import { Category, SubCategory, NewsItem } from '@/lib/types';
 
@@ -69,21 +70,22 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Fetch RSS + NewsAPI i parallelt, med timeout
-    const [rssItems, newsApiItems] = await Promise.all([
+    // Fetch RSS + NewsAPI + Mediastack i parallelt, med timeout
+    const [rssItems, newsApiItems, mediastackItems] = await Promise.all([
       withTimeout(fetchAllFeeds(), 8000, []),
       withTimeout(fetchAllNewsAPI(), 6000, []),
+      withTimeout(fetchMediastackDK(25), 5000, []),
     ]);
 
-    // Merge og dedup
-    const allItems = deduplicateItems([...rssItems, ...newsApiItems]);
+    // Merge og dedup (RSS prioriteres, derefter NewsAPI, derefter Mediastack)
+    const allItems = deduplicateItems([...rssItems, ...newsApiItems, ...mediastackItems]);
 
     if (allItems.length === 0) {
       return NextResponse.json({
         items: [],
         count: 0,
         fetchedAt: new Date().toISOString(),
-        sources: { rss: rssItems.length, newsapi: newsApiItems.length },
+        sources: { rss: rssItems.length, newsapi: newsApiItems.length, mediastack: mediastackItems.length },
       });
     }
 
@@ -152,7 +154,7 @@ export async function GET(request: NextRequest) {
       count: filteredItems.length,
       fetchedAt: new Date().toISOString(),
       grokEnabled: !!process.env.GROK_API_KEY,
-      sources: { rss: rssItems.length, newsapi: newsApiItems.length },
+      sources: { rss: rssItems.length, newsapi: newsApiItems.length, mediastack: mediastackItems.length },
     });
   } catch (error) {
     console.error('News API error:', error);
