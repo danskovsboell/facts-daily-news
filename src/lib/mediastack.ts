@@ -1,7 +1,7 @@
 import { NewsItem, Category, SubCategory } from './types';
 
 const MEDIASTACK_KEY = process.env.MEDIASTACK_KEY;
-const MEDIASTACK_BASE = 'http://api.mediastack.com/v1';
+const MEDIASTACK_BASE = 'https://api.mediastack.com/v1';
 
 // ============================================================
 // Hjælper: stabil ID fra URL
