@@ -118,7 +118,7 @@ export const FEED_SOURCES: FeedSource[] = [
   // ===== VERDEN - Generelt =====
   {
     name: 'AP News',
-    url: 'https://rsshub.app/apnews/topics/apf-topnews',
+    url: 'https://feedx.net/rss/ap.xml',
     category: 'verden',
     subCategory: 'generelt',
     language: 'en',
@@ -147,7 +147,10 @@ export const FEED_SOURCES: FeedSource[] = [
   },
   {
     name: 'Reuters Business',
-    url: 'https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best',
+    url: 'https://feeds.reuters.com/reuters/businessNews',
+    // Note: Reuters discontinued public RSS feeds in 2023.
+    // This feed is configured as a placeholder per spec.
+    // Bloomberg and Financial Times serve as primary finance sources.
     category: 'verden',
     subCategory: 'finans',
     language: 'en',
