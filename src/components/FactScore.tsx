@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { FACT_SCORE_COLORS } from '@/lib/constants';
 import { FactCheckResult, SourceLink } from '@/lib/types';
 
@@ -64,6 +65,65 @@ function SourceLinkChip({ source }: { source: SourceLink }) {
     >
       🔗 {source.domain || source.title || 'Kilde'}
     </a>
+  );
+}
+
+/* ─── Mobile-aware popup overlay ─── */
+function PopupOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    // Prevent body scroll when popup is open on mobile
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
+
+  const handleBackdropClick = useCallback((e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) onClose();
+  }, [onClose]);
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center sm:justify-center"
+      onClick={handleBackdropClick}
+    >
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      {/* Content — bottom sheet on mobile, centered popup on desktop */}
+      <div className="relative w-full max-w-lg sm:mx-4 animate-slideUp sm:animate-fadeIn">
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/* ─── Small inline popup (loading/error) — also made mobile-safe ─── */
+function SmallPopup({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center sm:justify-center"
+      onClick={(e) => { if (e.target === e.currentTarget && onClose) onClose(); }}
+    >
+      <div className="absolute inset-0 bg-black/50" />
+      <div className="relative w-full sm:max-w-sm sm:mx-4">
+        <div className="rounded-t-2xl sm:rounded-xl border border-zinc-700 bg-zinc-900 p-4 shadow-2xl">
+          {children}
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -160,7 +220,7 @@ export default function FactScore({ score: initialScore, details: initialDetails
         </button>
 
         {showDetails && loading && (
-          <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-zinc-700 bg-zinc-900 p-4 shadow-2xl">
+          <SmallPopup>
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
@@ -173,14 +233,14 @@ export default function FactScore({ score: initialScore, details: initialDetails
                 </div>
               </div>
             </div>
-          </div>
+          </SmallPopup>
         )}
 
         {showDetails && !loading && error && (
-          <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-red-700/50 bg-zinc-900 p-4 shadow-2xl">
+          <SmallPopup onClose={() => { setShowDetails(false); setError(null); }}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-red-400">⚠️ Fejl</span>
-              <button onClick={() => { setShowDetails(false); setError(null); }} className="text-zinc-500 hover:text-zinc-300 text-lg leading-none">✕</button>
+              <button onClick={() => { setShowDetails(false); setError(null); }} className="text-zinc-500 hover:text-zinc-300 text-lg leading-none p-1">✕</button>
             </div>
             <p className="text-[11px] text-red-300/80 mb-3">{error}</p>
             <button
@@ -190,7 +250,7 @@ export default function FactScore({ score: initialScore, details: initialDetails
             >
               🔄 Prøv igen
             </button>
-          </div>
+          </SmallPopup>
         )}
 
         {showDetails && !loading && !error && details && (
@@ -242,7 +302,7 @@ export default function FactScore({ score: initialScore, details: initialDetails
       </div>
 
       {showDetails && loading && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-zinc-700 bg-zinc-900 p-4 shadow-2xl">
+        <SmallPopup>
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" />
@@ -255,14 +315,14 @@ export default function FactScore({ score: initialScore, details: initialDetails
               </div>
             </div>
           </div>
-        </div>
+        </SmallPopup>
       )}
 
       {showDetails && !loading && error && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-red-700/50 bg-zinc-900 p-4 shadow-2xl">
+        <SmallPopup onClose={() => { setShowDetails(false); setError(null); }}>
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-red-400">⚠️ Fejl</span>
-            <button onClick={() => { setShowDetails(false); setError(null); }} className="text-zinc-500 hover:text-zinc-300 text-lg leading-none">✕</button>
+            <button onClick={() => { setShowDetails(false); setError(null); }} className="text-zinc-500 hover:text-zinc-300 text-lg leading-none p-1">✕</button>
           </div>
           <p className="text-[11px] text-red-300/80 mb-3">{error}</p>
           <button
@@ -272,7 +332,7 @@ export default function FactScore({ score: initialScore, details: initialDetails
           >
             🔄 Prøv igen
           </button>
-        </div>
+        </SmallPopup>
       )}
 
       {showDetails && !loading && !error && details && (
@@ -286,10 +346,11 @@ function DetailsPopup({ details, onClose, onReCheck, loading }: { details: FactC
   const [expandedClaim, setExpandedClaim] = useState<number | null>(null);
 
   return (
-    <div className="absolute right-0 top-full z-50 mt-2 w-96 max-h-[70vh] overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 p-4 shadow-2xl">
+    <PopupOverlay onClose={onClose}>
+    <div className="rounded-t-2xl sm:rounded-xl border border-zinc-700 bg-zinc-900 p-4 sm:p-5 shadow-2xl max-h-[85vh] overflow-y-auto">
       {/* Header with source count */}
       <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <h4 className="text-sm font-bold text-[#c5c5c5]">🔍 Fakta-check</h4>
           {details.verificationMethod === 'web-search' && (
             <span className="rounded-full bg-green-500/20 border border-green-500/30 px-2 py-0.5 text-[9px] font-bold text-green-400 uppercase tracking-wider">
@@ -302,7 +363,7 @@ function DetailsPopup({ details, onClose, onReCheck, loading }: { details: FactC
             </span>
           )}
         </div>
-        <button onClick={onClose} className="text-zinc-500 hover:text-[#c5c5c5] text-lg leading-none">✕</button>
+        <button onClick={onClose} className="text-zinc-400 hover:text-[#c5c5c5] text-xl leading-none p-1 -mr-1 shrink-0">✕</button>
       </div>
 
       {/* Source count badge */}
@@ -460,5 +521,6 @@ function DetailsPopup({ details, onClose, onReCheck, loading }: { details: FactC
         </button>
       )}
     </div>
+    </PopupOverlay>
   );
 }
