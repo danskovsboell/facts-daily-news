@@ -69,3 +69,49 @@ export interface GrokCategorizationResult {
   isGossip: boolean;
   confidence: number;
 }
+
+// ============================================================
+// V2: Article types
+// ============================================================
+
+export interface ArticleSource {
+  title: string;
+  url: string;
+  source_name: string;
+}
+
+export interface ArticleFactDetails {
+  claims: Claim[];
+  sources_checked: string[];
+}
+
+export interface Article {
+  id: string;
+  title: string;
+  summary: string;
+  body: string;
+  category: Category;
+  sub_category: SubCategory;
+  fact_score: number;
+  fact_details: ArticleFactDetails | null;
+  interest_tags: string[];
+  sources: ArticleSource[];
+  is_gossip: boolean;
+  created_at: string;
+  updated_at: string;
+  published: boolean;
+}
+
+export interface RawSource {
+  id: string;
+  title: string;
+  description: string;
+  url: string;
+  source_name: string;
+  published_at: string;
+  fetched_at: string;
+  category: Category;
+  sub_category: SubCategory;
+  raw_content: string;
+  processed: boolean;
+}
