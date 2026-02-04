@@ -1,5 +1,6 @@
 'use client';
 
+import { useUserInterests } from '@/hooks/useUserInterests';
 import { DEFAULT_INTERESTS } from '@/lib/constants';
 
 interface InterestFilterProps {
@@ -13,7 +14,10 @@ export default function InterestFilter({
   activeTag,
   onTagChange,
 }: InterestFilterProps) {
-  const tags = interests ?? DEFAULT_INTERESTS;
+  const { userInterestNames, loading } = useUserInterests();
+
+  // Use explicitly passed interests, or user's DB interests, or defaults
+  const tags = interests ?? (loading ? DEFAULT_INTERESTS : userInterestNames);
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-1.5">

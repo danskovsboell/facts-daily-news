@@ -24,29 +24,61 @@ export default function OnboardingPage() {
   const [customInput, setCustomInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [duplicateHint, setDuplicateHint] = useState<string | null>(null);
 
-  // Separate predefined and custom interests
+  // Separate predefined and community-created interests
   const predefinedInterests = useMemo(
     () => allInterests.filter((i) => i.is_predefined),
     [allInterests]
   );
 
-  const customInterests = useMemo(
-    () => allInterests.filter((i) => !i.is_predefined && selectedIds.has(i.id)),
-    [allInterests, selectedIds]
+  const communityInterests = useMemo(
+    () => allInterests.filter((i) => !i.is_predefined && i.active_users > 0),
+    [allInterests]
   );
 
-  const customCount = useMemo(
+  // Count how many custom interests the user has created/selected that are non-predefined
+  const userCustomCount = useMemo(
     () => allInterests.filter((i) => !i.is_predefined && selectedIds.has(i.id)).length,
     [allInterests, selectedIds]
   );
 
-  // Redirect if not logged in (middleware should handle this, but belt-and-suspenders)
+  // Redirect if not logged in
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/auth/login');
     }
   }, [authLoading, user, router]);
+
+  // Check for similar existing interests as user types
+  useEffect(() => {
+    const name = customInput.trim().toLowerCase();
+    if (!name || name.length < 2) {
+      setDuplicateHint(null);
+      return;
+    }
+    const match = allInterests.find(
+      (i) => i.name.toLowerCase() === name
+    );
+    if (match) {
+      setDuplicateHint(
+        selectedIds.has(match.id)
+          ? `"${match.name}" er allerede valgt`
+          : `"${match.name}" findes allerede — klik på den for at vælge den`
+      );
+    } else {
+      const similar = allInterests.find(
+        (i) => i.name.toLowerCase().includes(name) || name.includes(i.name.toLowerCase())
+      );
+      if (similar) {
+        setDuplicateHint(
+          `Lignende emne findes: "${similar.name}" — mener du den?`
+        );
+      } else {
+        setDuplicateHint(null);
+      }
+    }
+  }, [customInput, allInterests, selectedIds]);
 
   const toggleInterest = (id: string) => {
     setSelectedIds((prev) => {
@@ -65,7 +97,19 @@ export default function OnboardingPage() {
     const name = customInput.trim();
     if (!name) return;
 
-    if (customCount >= MAX_CUSTOM_INTERESTS) {
+    // Check for exact case-insensitive match — if it exists, just select it
+    const exactMatch = allInterests.find(
+      (i) => i.name.toLowerCase() === name.toLowerCase()
+    );
+    if (exactMatch) {
+      setSelectedIds((prev) => new Set(prev).add(exactMatch.id));
+      setCustomInput('');
+      setError(null);
+      setDuplicateHint(null);
+      return;
+    }
+
+    if (userCustomCount >= MAX_CUSTOM_INTERESTS) {
       setError(`Du kan højst tilføje ${MAX_CUSTOM_INTERESTS} egne interesser`);
       return;
     }
@@ -82,6 +126,7 @@ export default function OnboardingPage() {
 
     setCustomInput('');
     setError(null);
+    setDuplicateHint(null);
   };
 
   const handleSave = async () => {
@@ -175,12 +220,43 @@ export default function OnboardingPage() {
         </div>
       </section>
 
-      {/* Custom interests */}
+      {/* Community-created interests */}
+      {communityInterests.length > 0 && (
+        <section className="mt-8">
+          <h2 className="mb-3 text-sm font-medium text-zinc-400">
+            Oprettet af brugere
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {communityInterests.map((interest) => {
+              const isSelected = selectedIds.has(interest.id);
+              return (
+                <button
+                  key={interest.id}
+                  onClick={() => toggleInterest(interest.id)}
+                  className={`rounded-full border px-4 py-2 text-sm font-medium transition-all ${
+                    isSelected
+                      ? 'border-accent-500/50 bg-accent-600/20 text-accent-400 hover:bg-accent-600/30 shadow-sm shadow-accent-500/10'
+                      : 'border-zinc-700 bg-zinc-800/50 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
+                  }`}
+                >
+                  {isSelected && <span className="mr-1.5">✓</span>}
+                  {interest.name}
+                  <span className="ml-1.5 text-xs opacity-60">
+                    ({interest.active_users} {interest.active_users === 1 ? 'bruger' : 'brugere'})
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Add new custom interest */}
       <section className="mt-8">
         <h2 className="mb-3 text-sm font-medium text-zinc-400">
-          Tilføj egne interesser
+          Opret nyt emne
           <span className="ml-2 text-xs text-zinc-600">
-            ({customCount}/{MAX_CUSTOM_INTERESTS})
+            Kun hvis det ikke allerede findes ovenfor
           </span>
         </h2>
         <div className="flex gap-2">
@@ -195,31 +271,18 @@ export default function OnboardingPage() {
           />
           <button
             onClick={handleAddCustom}
-            disabled={!customInput.trim() || customCount >= MAX_CUSTOM_INTERESTS}
+            disabled={!customInput.trim()}
             className="rounded-lg bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             + Tilføj
           </button>
         </div>
 
-        {/* Show added custom interests */}
-        {customInterests.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {customInterests.map((interest) => (
-              <span
-                key={interest.id}
-                className="inline-flex items-center gap-1.5 rounded-full border border-accent-500/50 bg-accent-600/20 px-3 py-1.5 text-sm text-accent-400"
-              >
-                {interest.name}
-                <button
-                  onClick={() => toggleInterest(interest.id)}
-                  className="ml-0.5 text-accent-500/60 transition-colors hover:text-accent-300"
-                >
-                  ✕
-                </button>
-              </span>
-            ))}
-          </div>
+        {/* Duplicate / similar hint */}
+        {duplicateHint && (
+          <p className="mt-2 text-xs text-yellow-500/80">
+            💡 {duplicateHint}
+          </p>
         )}
       </section>
 

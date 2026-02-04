@@ -9,6 +9,7 @@ export interface Interest {
   id: string;
   name: string;
   is_predefined: boolean;
+  active_users: number;
 }
 
 export interface UserInterest {

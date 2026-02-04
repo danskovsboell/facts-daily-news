@@ -30,6 +30,7 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [duplicateHint, setDuplicateHint] = useState<string | null>(null);
   const [apiStatuses, setApiStatuses] = useState<ApiStatuses>({
     grok: 'loading',
     grok_search: 'loading',
@@ -71,15 +72,47 @@ export default function SettingsPage() {
     [allInterests]
   );
 
-  const customInterests = useMemo(
-    () => allInterests.filter((i) => !i.is_predefined && selectedIds.has(i.id)),
+  // Community interests: custom interests with active users (excluding ones only the current user follows)
+  const communityInterests = useMemo(
+    () => allInterests.filter((i) => !i.is_predefined && (i.active_users > 0 || selectedIds.has(i.id))),
     [allInterests, selectedIds]
   );
 
-  const customCount = useMemo(
+  // Count user's custom selections
+  const userCustomCount = useMemo(
     () => allInterests.filter((i) => !i.is_predefined && selectedIds.has(i.id)).length,
     [allInterests, selectedIds]
   );
+
+  // Check for similar existing interests as user types
+  useEffect(() => {
+    const name = customInput.trim().toLowerCase();
+    if (!name || name.length < 2) {
+      setDuplicateHint(null);
+      return;
+    }
+    const match = allInterests.find(
+      (i) => i.name.toLowerCase() === name
+    );
+    if (match) {
+      setDuplicateHint(
+        selectedIds.has(match.id)
+          ? `"${match.name}" er allerede valgt`
+          : `"${match.name}" findes allerede — klik på den for at vælge den`
+      );
+    } else {
+      const similar = allInterests.find(
+        (i) => i.name.toLowerCase().includes(name) || name.includes(i.name.toLowerCase())
+      );
+      if (similar) {
+        setDuplicateHint(
+          `Lignende emne findes: "${similar.name}" — mener du den?`
+        );
+      } else {
+        setDuplicateHint(null);
+      }
+    }
+  }, [customInput, allInterests, selectedIds]);
 
   const toggleInterest = (id: string) => {
     setSelectedIds((prev) => {
@@ -99,7 +132,20 @@ export default function SettingsPage() {
     const name = customInput.trim();
     if (!name) return;
 
-    if (customCount >= MAX_CUSTOM_INTERESTS) {
+    // Check for exact case-insensitive match — if it exists, just select it
+    const exactMatch = allInterests.find(
+      (i) => i.name.toLowerCase() === name.toLowerCase()
+    );
+    if (exactMatch) {
+      setSelectedIds((prev) => new Set(prev).add(exactMatch.id));
+      setCustomInput('');
+      setSaved(false);
+      setError(null);
+      setDuplicateHint(null);
+      return;
+    }
+
+    if (userCustomCount >= MAX_CUSTOM_INTERESTS) {
       setError(`Du kan højst tilføje ${MAX_CUSTOM_INTERESTS} egne interesser`);
       return;
     }
@@ -117,6 +163,7 @@ export default function SettingsPage() {
     setCustomInput('');
     setSaved(false);
     setError(null);
+    setDuplicateHint(null);
   };
 
   const handleSave = async () => {
@@ -176,76 +223,99 @@ export default function SettingsPage() {
             )}
 
             {/* Predefined interests */}
-            <div className="mt-4 flex flex-wrap gap-2">
-              {predefinedInterests.map((interest) => {
-                const isSelected = selectedIds.has(interest.id);
-                return (
-                  <button
-                    key={interest.id}
-                    onClick={() => toggleInterest(interest.id)}
-                    className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
-                      isSelected
-                        ? 'border-accent-500/50 bg-accent-600/20 text-accent-400 hover:bg-accent-600/30'
-                        : 'border-zinc-700 bg-zinc-800/50 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
-                    }`}
-                  >
-                    {isSelected && <span className="mr-1">✓</span>}
-                    {interest.name}
-                  </button>
-                );
-              })}
+            <div className="mt-4">
+              <h3 className="mb-2 text-sm font-medium text-zinc-400">
+                Populære emner
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {predefinedInterests.map((interest) => {
+                  const isSelected = selectedIds.has(interest.id);
+                  return (
+                    <button
+                      key={interest.id}
+                      onClick={() => toggleInterest(interest.id)}
+                      className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
+                        isSelected
+                          ? 'border-accent-500/50 bg-accent-600/20 text-accent-400 hover:bg-accent-600/30'
+                          : 'border-zinc-700 bg-zinc-800/50 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
+                      }`}
+                    >
+                      {isSelected && <span className="mr-1">✓</span>}
+                      {interest.name}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Custom interests section */}
+            {/* Community-created interests */}
+            {communityInterests.length > 0 && (
+              <div className="mt-6">
+                <h3 className="mb-2 text-sm font-medium text-zinc-400">
+                  Oprettet af brugere
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {communityInterests.map((interest) => {
+                    const isSelected = selectedIds.has(interest.id);
+                    return (
+                      <button
+                        key={interest.id}
+                        onClick={() => toggleInterest(interest.id)}
+                        className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
+                          isSelected
+                            ? 'border-accent-500/50 bg-accent-600/20 text-accent-400 hover:bg-accent-600/30'
+                            : 'border-zinc-700 bg-zinc-800/50 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
+                        }`}
+                      >
+                        {isSelected && <span className="mr-1">✓</span>}
+                        {interest.name}
+                        {interest.active_users > 0 && (
+                          <span className="ml-1.5 text-xs opacity-60">
+                            ({interest.active_users} {interest.active_users === 1 ? 'bruger' : 'brugere'})
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Add new custom interest */}
             {user && (
               <div className="mt-6">
                 <h3 className="mb-2 text-sm font-medium text-zinc-400">
-                  Egne interesser
+                  Opret nyt emne
                   <span className="ml-2 text-xs text-zinc-600">
-                    ({customCount}/{MAX_CUSTOM_INTERESTS})
+                    Kun hvis det ikke allerede findes ovenfor
                   </span>
                 </h3>
 
-                {/* Added custom interests */}
-                {customInterests.length > 0 && (
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    {customInterests.map((interest) => (
-                      <span
-                        key={interest.id}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-accent-500/50 bg-accent-600/20 px-3 py-1.5 text-sm text-accent-400"
-                      >
-                        {interest.name}
-                        <button
-                          onClick={() => toggleInterest(interest.id)}
-                          className="ml-0.5 text-accent-500/60 transition-colors hover:text-accent-300"
-                          title="Fjern interesse"
-                        >
-                          ✕
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Add new custom interest */}
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={customInput}
                     onChange={(e) => setCustomInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
-                    placeholder="Tilføj egen interesse..."
+                    placeholder="Tilføj helt nyt emne..."
                     maxLength={50}
                     className="flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-[#c5c5c5] placeholder-zinc-600 outline-none transition-colors focus:border-accent-600 focus:ring-1 focus:ring-accent-600"
                   />
                   <button
                     onClick={handleAddCustom}
-                    disabled={!customInput.trim() || customCount >= MAX_CUSTOM_INTERESTS}
+                    disabled={!customInput.trim()}
                     className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     + Tilføj
                   </button>
                 </div>
+
+                {/* Duplicate / similar hint */}
+                {duplicateHint && (
+                  <p className="mt-2 text-xs text-yellow-500/80">
+                    💡 {duplicateHint}
+                  </p>
+                )}
               </div>
             )}
 
